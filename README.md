@@ -1,6 +1,6 @@
-# 🪣 Kova
+# 🪣 Maya
 
-**Kova**, Android cihazlar için tamamen çevrimdışı çalışan, llama.cpp tabanlı bir yerel LLM sohbet uygulamasıdır. Hiçbir bulut bağlantısı, sunucu veya veri paylaşımı yoktur. Model, doğrudan telefonunuzun işlemcisinde çalışır.
+**Maya**, Android cihazlar için tamamen çevrimdışı çalışan, llama.cpp tabanlı bir yerel LLM sohbet uygulamasıdır. Hiçbir bulut bağlantısı, sunucu veya veri paylaşımı yoktur. Model, doğrudan telefonunuzun işlemcisinde çalışır.
 
 > 🌐 Uygulama arayüzü Türkçedir.
 
@@ -141,4 +141,4 @@ Bu proje [llama.cpp](https://github.com/ggerganov/llama.cpp) üzerine inşa edil
 
 ---
 
-*Kova v5.6 • matrixportalx*
+*Maya v1.0.0 • matrixportalx*
