@@ -115,7 +115,7 @@ Genel kural: llama.cpp'nin desteklediği tüm GGUF modeller çalışır.
 ## 🏗️ Mimari & Teknik Detaylar
 
 ```
-kova/
+maya/
   app/          → Android Kotlin katmanı
   lib/          → JNI köprüsü (Kotlin + C++)
   llama.cpp/    → Motor (git submodule)
