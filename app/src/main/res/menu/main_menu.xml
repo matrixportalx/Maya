@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_change_model"
+        android:title="🧠 Model Değiştir"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_model_info"
+        android:title="ℹ️ Model Bilgisi"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_export_chat"
+        android:title="📤 Sohbeti Dışa Aktar"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_clear_chat"
+        android:title="🗑️ Sohbeti Temizle"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_settings"
+        android:title="⚙️ Ayarlar"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_backup"
+        android:title="💾 Yedekle"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_restore"
+        android:title="📂 Geri Yükle"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_logs"
+        android:title="🔍 Logları Göster"
+        app:showAsAction="never" />
+
+</menu>

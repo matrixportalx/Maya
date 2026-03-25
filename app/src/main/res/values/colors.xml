@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Temel Android renkleri (korundu) -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Karanlık tema renkleri (korundu) -->
+    <color name="black_olive">#353839</color>
+    <color name="dark_surface">#1E1E1E</color>
+    <color name="dark_gray_medium">#212121</color>
+    <color name="dark_gray">#2C2C2C</color>
+
+    <!-- Accent renkleri (her iki temada ortak) -->
+    <color name="accent_warm">#E8724A</color>
+    <color name="accent_on_warm">#FFFFFF</color>
+    <color name="accent_warm_dark">#C45A38</color>
+
+    <!-- ── AYDINLIK TEMA ── -->
+    <!-- Arka plan -->
+    <color name="light_background">#F0F2F5</color>
+    <color name="light_surface">#ECEFF4</color>
+    <color name="light_surface_variant">#E1E5EC</color>
+    <color name="light_card">#FFFFFF</color>
+
+    <!-- Metin -->
+    <color name="light_text_primary">#1A1A2E</color>
+    <color name="light_text_secondary">#4A4A6A</color>
+    <color name="light_text_hint">#8888AA</color>
+
+    <!-- Mesaj balonları -->
+    <color name="light_bubble_user">#4A4E9A</color>
+    <color name="light_bubble_user_text">#FFFFFF</color>
+    <color name="light_bubble_assistant">#FFFFFF</color>
+    <color name="light_bubble_assistant_text">#1A1A2E</color>
+    <color name="light_bubble_assistant_border">#D0D4E8</color>
+
+    <!-- Avatar arka planları -->
+    <color name="light_avatar_user">#2E2E5E</color>
+    <color name="light_avatar_assistant">#1A3A1A</color>
+
+    <!-- Mesaj sender isim renkleri -->
+    <color name="light_sender_user">#3A3D8A</color>
+    <color name="light_sender_assistant">#1A6B1A</color>
+
+    <!-- Mesaj index rengi -->
+    <color name="light_msg_index">#8888AA</color>
+
+    <!-- Timestamp rengi -->
+    <color name="light_timestamp">#8888AA</color>
+
+    <!-- Toolbar / drawer -->
+    <color name="light_toolbar">#ECEFF4</color>
+    <color name="light_drawer">#E8EBF2</color>
+    <color name="light_drawer_item">#D8DCE8</color>
+    <color name="light_divider">#C8CCDA</color>
+
+    <!-- Input alanı -->
+    <color name="light_input_bg">#ECEFF4</color>
+    <color name="light_input_border">#C0C4D8</color>
+
+    <!-- Thinking block -->
+    <color name="light_thinking_bg">#EEF0F8</color>
+    <color name="light_thinking_text">#5A5A8A</color>
+    <color name="light_thinking_header">#7A7AAA</color>
+
+    <!-- t/s göstergesi -->
+    <color name="light_tps_text">#8888AA</color>
+
+    <!-- Link rengi — HER İKİ TEMADA GÖRÜNÜR OLACAK ŞEKİLDE -->
+    <color name="link_color_light">#1A4FC4</color>
+
+    <!-- ── KARANLIK TEMA ── -->
+    <color name="dark_background">#121212</color>
+    <color name="dark_input_bg">#1E1E1E</color>
+
+    <!-- Link rengi karanlık temada -->
+    <color name="link_color_dark">#7AADFF</color>
+
+    <!-- Mesaj sender isim renkleri karanlık tema -->
+    <color name="dark_sender_user">#D0D0FF</color>
+    <color name="dark_sender_assistant">#A0D0A0</color>
+</resources>

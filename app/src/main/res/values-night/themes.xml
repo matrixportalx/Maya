@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Kova Karanlık Tema — res/values-night/themes.xml
+    -->
+    <style name="Base.Theme.AiChatSample" parent="Theme.Material3.Dark.NoActionBar">
+        <!-- Accent / primary rengi: warm turuncu (FAB, butonlar, slider) -->
+        <item name="colorPrimary">@color/accent_warm</item>
+        <item name="colorPrimaryVariant">@color/accent_warm_dark</item>
+        <item name="colorOnPrimary">@color/accent_on_warm</item>
+
+        <!-- Yüzey renkleri -->
+        <item name="colorSurface">@color/dark_surface</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+        <item name="colorOnSurfaceVariant">#AAAAAA</item>
+
+        <!-- Arka plan -->
+        <item name="android:colorBackground">@color/dark_background</item>
+
+        <!-- Status bar: ESKİ GRİ (#1E1E1E) — colorPrimary'den bağımsız -->
+        <item name="android:statusBarColor">@color/dark_surface</item>
+        <item name="android:navigationBarColor">@color/dark_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Dialog arka planı -->
+        <item name="android:colorBackgroundFloating">@color/dark_gray_medium</item>
+
+        <!-- Link rengi — karanlık temada açık mavi görünür -->
+        <item name="android:textColorLink">@color/link_color_dark</item>
+
+        <!-- EditText hint rengi -->
+        <item name="android:textColorHint">#666666</item>
+    </style>
+
+    <style name="Theme.AiChatSample" parent="Base.Theme.AiChatSample" />
+
+</resources>

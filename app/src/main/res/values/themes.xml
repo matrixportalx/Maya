@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+        Maya Aydınlık Tema — res/values/themes.xml
+    -->
+    <style name="Base.Theme.AiChatSample" parent="Theme.Material3.Light.NoActionBar">
+        <!-- Accent / primary rengi: warm turuncu (FAB, butonlar, slider) -->
+        <item name="colorPrimary">@color/accent_warm</item>
+        <item name="colorPrimaryVariant">@color/accent_warm_dark</item>
+        <item name="colorOnPrimary">@color/accent_on_warm</item>
+
+        <!-- Yüzey renkleri -->
+        <item name="colorSurface">@color/light_surface</item>
+        <item name="colorSurfaceVariant">@color/light_surface_variant</item>
+        <item name="colorOnSurface">@color/light_text_primary</item>
+        <item name="colorOnSurfaceVariant">@color/light_text_secondary</item>
+
+        <!-- Arka plan -->
+        <item name="android:colorBackground">@color/light_background</item>
+
+        <!-- Status bar: BEYAZ — colorPrimary'den bağımsız -->
+        <item name="android:statusBarColor">@color/white</item>
+        <item name="android:navigationBarColor">@color/light_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+
+        <!-- Dialog arka planı -->
+        <item name="android:colorBackgroundFloating">@color/light_card</item>
+
+        <!-- Link rengi — aydınlık temada koyu mavi görünür -->
+        <item name="android:textColorLink">@color/link_color_light</item>
+
+        <!-- EditText hint rengi -->
+        <item name="android:textColorHint">@color/light_text_hint</item>
+    </style>
+
+    <style name="Theme.AiChatSample" parent="Base.Theme.AiChatSample" />
+
+</resources>

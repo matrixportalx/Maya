@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawer_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <!-- Ana içerik -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:background="?android:colorBackground">
+
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurface"
+            android:theme="@style/ThemeOverlay.AppCompat.ActionBar"
+            app:navigationIcon="@drawable/ic_menu_hamburger"
+            app:title="Maya"
+            app:titleTextColor="?attr/colorOnSurface"
+            app:subtitleTextColor="?attr/colorOnSurfaceVariant" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messages"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="?android:colorBackground"
+            android:clipToPadding="false"
+            android:padding="8dp"
+            android:scrollbars="vertical" />
+
+        <!-- v4.8: Görüntü önizleme şeridi -->
+        <LinearLayout
+            android:id="@+id/image_preview_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/colorSurfaceVariant"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/image_preview"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:scaleType="centerCrop"
+                android:background="?attr/colorSurface"
+                android:contentDescription="Seçili görüntü" />
+
+            <TextView
+                android:id="@+id/image_preview_label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:textSize="13sp"
+                android:textColor="?attr/colorOnSurface"
+                android:text="🖼️ Görüntü eklendi" />
+
+            <Button
+                android:id="@+id/btn_remove_image"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕"
+                android:textSize="16sp"
+                android:textColor="#FF6666"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp" />
+
+        </LinearLayout>
+
+        <!-- Giriş satırı -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?attr/colorSurface"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <!-- v4.8: Görüntü ekle butonu -->
+            <Button
+                android:id="@+id/btn_attach_image"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📷"
+                android:textSize="20sp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="2dp"
+                android:contentDescription="Görüntü ekle"
+                android:alpha="0.6" />
+
+            <!-- v5.1: İnternet araması toggle butonu -->
+            <Button
+                android:id="@+id/btn_web_search"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🌐"
+                android:textSize="20sp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="2dp"
+                android:contentDescription="Web araması"
+                android:alpha="0.4" />
+
+            <EditText
+                android:id="@+id/message"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@null"
+                android:hint="Mesaj yazın..."
+                android:textColor="?attr/colorOnSurface"
+                android:imeOptions="actionSend"
+                android:inputType="textMultiLine"
+                android:maxLines="4"
+                android:minHeight="48dp" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/send"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:backgroundTint="@color/accent_warm"
+                android:contentDescription="Gönder"
+                app:shapeAppearance="@style/ShapeAppearance.Material3.Corner.Large" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Sol çekmece -->
+    <LinearLayout
+        android:id="@+id/nav_drawer"
+        android:layout_width="280dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="?attr/colorSurface"
+        android:elevation="8dp"
+        android:fitsSystemWindows="true"
+        android:orientation="vertical">
+
+        <!-- Karakterler başlığı -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="?attr/colorSurfaceVariant"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🎭 Karakterler"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Button
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:id="@+id/btn_add_character"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+ Ekle"
+                android:textColor="@color/accent_warm"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Karakter listesi -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/characters_list"
+            android:layout_width="match_parent"
+            android:layout_height="168dp"
+            android:divider="@null"
+            android:background="?attr/colorSurface" />
+
+        <!-- Ayırıcı çizgi -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="?attr/colorSurfaceVariant" />
+
+        <!-- Sohbet geçmişi başlığı -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="?attr/colorSurfaceVariant"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Sohbet Geçmişi"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Button
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:id="@+id/btn_new_chat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+ Yeni"
+                android:textColor="@color/accent_warm"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Sohbet listesi -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/conversations_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="@null" />
+
+        <!-- Alt imza -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Maya v1.0.2 • matrixportalx ❤️"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="11sp"
+            android:alpha="0.45"
+            android:gravity="center"
+            android:paddingTop="8dp"
+            android:paddingBottom="12dp" />
+
+    </LinearLayout>
+
+</androidx.drawerlayout.widget.DrawerLayout>
