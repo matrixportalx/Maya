@@ -1,4 +1,4 @@
-name: imzalı APK Yap
+name: Maya APK
 
 on:
   workflow_dispatch:
@@ -49,21 +49,21 @@ jobs:
             app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release-unsigned.apk kova.apk
+        run: mv app/build/outputs/apk/release/app-release-unsigned.apk Maya.apk
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kova
-          path: kova.apk
+          name: Maya
+          path: Maya.apk
 
       - name: Release Oluştur
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
-          name: "Kova v${{ steps.version.outputs.version }}"
-          files: kova.apk
+          name: "Maya v${{ steps.version.outputs.version }}"
+          files: Maya.apk
           body: |
-            APK'yı indirmek için aşağıdaki `kova.apk` dosyasına tıklayın.
+            APK'yı indirmek için aşağıdaki `Maya.apk` dosyasına tıklayın.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
