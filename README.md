@@ -1,4 +1,4 @@
-# 🪣 Maya
+# 👩‍🦰 Maya
 
 **Maya**, Android cihazlar için tamamen çevrimdışı çalışan, llama.cpp tabanlı bir yerel LLM sohbet uygulamasıdır. Hiçbir bulut bağlantısı, sunucu veya veri paylaşımı yoktur. Model, doğrudan telefonunuzun işlemcisinde çalışır.
 
