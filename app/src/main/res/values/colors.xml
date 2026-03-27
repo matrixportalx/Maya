@@ -84,4 +84,7 @@
     <!-- Mesaj sender isim renkleri karanlık tema -->
     <color name="dark_sender_user">#D0D0FF</color>
     <color name="dark_sender_assistant">#A0D0A0</color>
+
+    <!-- Arama highlight rengi -->
+    <color name="search_highlight">#FFEB3B</color>      <!-- aydınlık tema için sarı -->
 </resources>
