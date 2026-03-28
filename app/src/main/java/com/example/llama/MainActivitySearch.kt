@@ -191,7 +191,7 @@ internal fun MainActivity.showSearchOverlay() {
     resultsRv.adapter = adapter
 
     // Scope state: false = bu sohbet, true = tüm sohbetler
-    var isGlobalScope = false
+    var isGlobalScope = true
 
     fun updateScopeButton() {
         btnScope.text = if (isGlobalScope) "Tüm sohbetler" else "Bu sohbet"
