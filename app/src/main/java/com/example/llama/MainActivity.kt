@@ -382,6 +382,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_search       -> { showSearchOverlay(); true }
             R.id.action_change_model -> { showModelPickerDialog(); true }
             R.id.action_model_info   -> { showModelInfoDialog(); true }
             R.id.action_export_chat  -> { exportChat(); true }

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- layout/item_search_result.xml -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Sohbet başlığı + zaman (tüm sohbetler modunda görünür) -->
+    <LinearLayout
+        android:id="@+id/search_result_conv_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/search_result_conv_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="11sp"
+            android:textColor="@color/accent_warm"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/search_result_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:fontFamily="monospace" />
+
+    </LinearLayout>
+
+    <!-- Mesaj önizlemesi (eşleşen kısım highlight'lı) -->
+    <TextView
+        android:id="@+id/search_result_snippet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textColor="?attr/colorOnSurface"
+        android:maxLines="3"
+        android:ellipsize="end"
+        android:lineSpacingMultiplier="1.2" />
+
+    <!-- Ayırıcı -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:background="?attr/colorSurfaceVariant" />
+
+</LinearLayout>

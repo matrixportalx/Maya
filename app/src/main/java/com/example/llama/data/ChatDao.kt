@@ -55,4 +55,27 @@ interface ChatDao {
     // Web araması annotated içeriğini mesaj kaydına güncelle
     @Query("UPDATE messages SET content = :content WHERE id = :id")
     suspend fun updateMessageContent(id: String, content: String)
+    // Aktif sohbette model yanıtlarında arama
+    @Query("""
+        SELECT * FROM messages 
+        WHERE conversationId = :conversationId 
+        AND role = 'assistant' 
+        AND content LIKE '%' || :query || '%'
+        ORDER BY timestamp ASC
+    """)
+    suspend fun searchInConversation(conversationId: String, query: String): List<DbMessage>
+
+    // Tüm sohbetlerde model yanıtlarında arama
+    @Query("""
+        SELECT * FROM messages 
+        WHERE role = 'assistant' 
+        AND content LIKE '%' || :query || '%'
+        ORDER BY timestamp DESC
+        LIMIT 200
+    """)
+    suspend fun searchAllConversations(query: String): List<DbMessage>
+
+    // Sohbet başlığını ID ile getir
+    @Query("SELECT title FROM conversations WHERE id = :conversationId")
+    suspend fun getConversationTitle(conversationId: String): String?
 }

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- layout/activity_search.xml — Arama sonuçları overlay -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?android:colorBackground">
+
+    <!-- Arama çubuğu -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="?attr/colorSurface"
+        android:paddingStart="4dp"
+        android:paddingEnd="8dp"
+        android:elevation="4dp">
+
+        <ImageButton
+            android:id="@+id/btn_search_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="Geri"
+            android:tint="?attr/colorOnSurface" />
+
+        <EditText
+            android:id="@+id/search_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@null"
+            android:hint="Mesajlarda ara..."
+            android:textSize="16sp"
+            android:singleLine="true"
+            android:imeOptions="actionSearch"
+            android:inputType="text"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp" />
+
+        <!-- Aktif sohbet / Tüm sohbetler toggle -->
+        <TextView
+            android:id="@+id/btn_search_scope"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:paddingHorizontal="10dp"
+            android:gravity="center"
+            android:text="Bu sohbet"
+            android:textSize="12sp"
+            android:textColor="@color/accent_warm"
+            android:background="@drawable/bg_scope_toggle"
+            android:clickable="true"
+            android:focusable="true" />
+
+    </LinearLayout>
+
+    <!-- Sonuç sayısı -->
+    <TextView
+        android:id="@+id/search_result_count"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:textSize="12sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:visibility="gone" />
+
+    <!-- Sonuç listesi -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/search_results_rv"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="8dp" />
+
+    <!-- Boş durum -->
+    <TextView
+        android:id="@+id/search_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="Sonuç bulunamadı"
+        android:textSize="15sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:visibility="gone" />
+
+</LinearLayout>

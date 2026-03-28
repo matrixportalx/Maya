@@ -240,7 +240,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Maya v1.0.1 • matrixportalx ❤️"
+            android:text="Maya v1.0.3 • matrixportalx ❤️"
             android:textColor="?attr/colorOnSurface"
             android:textSize="11sp"
             android:alpha="0.45"

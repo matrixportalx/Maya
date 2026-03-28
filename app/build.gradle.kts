@@ -12,8 +12,8 @@ android {
         applicationId = "tr.maya"
         minSdk = 33
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true

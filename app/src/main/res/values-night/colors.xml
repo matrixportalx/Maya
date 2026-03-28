@@ -86,5 +86,5 @@
     <color name="dark_sender_assistant">#A0D0A0</color>
 
     <!-- Arama highlight rengi -->
-    <color name="search_highlight">#FFEB3B</color>      <!-- aydınlık tema için sarı -->
+    <color name="search_highlight">#7B6F00</color>    <!-- (koyu sarı-kahve) -->
 </resources>
