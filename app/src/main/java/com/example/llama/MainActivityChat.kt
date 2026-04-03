@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-// \u2500\u2500 Sohbet y\u00f6netimi \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ── Sohbet yönetimi ───────────────────────────────────────────────────────────
 
 internal suspend fun MainActivity.ensureActiveConversation() {
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
@@ -91,12 +91,12 @@ internal fun MainActivity.clearCurrentChat() {
     }
 }
 
-// \u2500\u2500 Mesaj g\u00f6nderme \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ── Mesaj gönderme ────────────────────────────────────────────────────────────
 
 internal fun MainActivity.sendMessage() {
     val text = messageInput.text.toString().trim()
     if (text.isEmpty() && selectedImagePath == null) return
-    val msgText = text.ifEmpty { "Bu g\u00f6rseli a\u00e7\u0131kla." }
+    val msgText = text.ifEmpty { "Bu görseli açıkla." }
     messageInput.text.clear()
 
     val imgPath = selectedImagePath
@@ -128,12 +128,12 @@ internal fun MainActivity.sendMessage() {
         imagePreviewView.setImageDrawable(null)
     }
 
-    // \u2500\u2500 v5.5: URL okuma \u2014 web aramas\u0131ndan ba\u011f\u0131ms\u0131z, her zaman otomatik \u2500\u2500\u2500\u2500\u2500\u2500
+    // ── v5.5: URL okuma — web aramasından bağımsız, her zaman otomatik ──────
     val urlsInMessage = extractUrlsFromMessage(msgText, limit = 3)
     if (urlsInMessage.isNotEmpty() && imgPath == null) {
         lifecycleScope.launch {
             val savedTitle = supportActionBar?.title?.toString() ?: ""
-            supportActionBar?.title = "\ud83d\udd17 Sayfa okunuyor\u2026"
+            supportActionBar?.title = "🔗 Sayfa okunuyor…"
 
             val pageContent = withContext(Dispatchers.IO) { fetchUrlsFromMessage(msgText) }
 
@@ -141,12 +141,12 @@ internal fun MainActivity.sendMessage() {
 
             if (pageContent.isNotEmpty()) {
                 val annotated = buildString {
-                    appendLine("A\u015fa\u011f\u0131da kullan\u0131c\u0131n\u0131n payla\u015ft\u0131\u011f\u0131 URL(ler)den \u00e7ekilen sayfa i\u00e7erikleri yer almaktad\u0131r.")
-                    appendLine("Bu i\u00e7eri\u011fi kullanarak kullan\u0131c\u0131n\u0131n iste\u011fini yerine getir.")
+                    appendLine("Aşağıda kullanıcının paylaştığı URL(ler)den çekilen sayfa içerikleri yer almaktadır.")
+                    appendLine("Bu içeriği kullanarak kullanıcının isteğini yerine getir.")
                     appendLine()
                     appendLine(pageContent)
                     appendLine()
-                    append("Kullan\u0131c\u0131 mesaj\u0131: $msgText")
+                    append("Kullanıcı mesajı: $msgText")
                 }
                 val modified = currentMessages.toMutableList()
                 val lastIdx = modified.indexOfLast { it.isUser }
@@ -155,10 +155,10 @@ internal fun MainActivity.sendMessage() {
                     modified[lastIdx] = updated
                     currentMessages[lastIdx] = updated
                 }
-                MainActivity.log("URLFetch", "URL i\u00e7eri\u011fi annotatedContent'e yaz\u0131ld\u0131: ${pageContent.length} karakter")
+                MainActivity.log("URLFetch", "URL içeriği annotatedContent'e yazıldı: ${pageContent.length} karakter")
                 continueWithWebSearch(msgText, imgPath, currentMessages.toList())
             } else {
-                MainActivity.log("URLFetch", "URL fetch sonu\u00e7 vermedi, normal ak\u0131\u015fa devam ediliyor")
+                MainActivity.log("URLFetch", "URL fetch sonuç vermedi, normal akışa devam ediliyor")
                 continueWithWebSearch(msgText, imgPath, currentMessages.toList())
             }
         }
@@ -169,7 +169,7 @@ internal fun MainActivity.sendMessage() {
 }
 
 /**
- * URL fetch sonras\u0131nda (veya URL yoksa do\u011frudan) web aramas\u0131 ak\u0131\u015f\u0131n\u0131 y\u00fcr\u00fct\u00fcr.
+ * URL fetch sonrasında (veya URL yoksa doğrudan) web araması akışını yürütür.
  */
 private fun MainActivity.continueWithWebSearch(
     msgText: String,
@@ -192,7 +192,7 @@ private fun MainActivity.continueWithWebSearch(
                 }
                 MainActivity.log("Maya", "Arama sorgusu (mod=$webSearchQueryMode): \"$searchQuery\"")
 
-                supportActionBar?.title = "\ud83d\udd0d Aran\u0131yor: ${searchQuery.take(30)}\u2026"
+                supportActionBar?.title = "🔍 Aranıyor: ${searchQuery.take(30)}…"
                 val searchResults = withContext(Dispatchers.IO) { performWebSearch(searchQuery) }
                 supportActionBar?.title = savedTitle
 
@@ -205,8 +205,533 @@ private fun MainActivity.continueWithWebSearch(
                         "searxng" -> "SearXNG ($searxngUrl)"
                         else      -> "DuckDuckGo"
                     }
-                    MainActivity.log("WebArama", "=== SON ARAMA SONU\u00c7LARI ===")
+                    MainActivity.log("WebArama", "=== SON ARAMA SONUÇLARI ===")
                     MainActivity.log("WebArama", "Motor: $motorName | Sorgu: \"$searchQuery\" | Kaynak mesaj: \"${msgText.take(60)}\"")
                     MainActivity.log("WebArama", "---")
                     searchResults.lines().forEach { line -> MainActivity.log("WebArama", line) }
-                    MainActivity.log("WebArama", "--- Toplam: ${searchResults.length
+                    MainActivity.log("WebArama", "--- Toplam: ${searchResults.length} karakter ---")
+
+                    val today = java.text.SimpleDateFormat("d MMMM yyyy, EEEE", java.util.Locale("tr")).format(java.util.Date())
+
+                    val modified = currentMessages.toMutableList()
+                    val lastIdx = modified.indexOfLast { it.isUser }
+                    if (lastIdx >= 0) {
+                        val existing = modified[lastIdx]
+                        val existingAnnotated = existing.annotatedContent ?: ""
+                        val annotated = buildString {
+                            appendLine("Bugünün tarihi: $today")
+                            appendLine()
+                            appendLine("\"$searchQuery\" sorgusu için gerçek zamanlı web arama sonuçları:")
+                            appendLine("Bu bilgiler GERÇEK ve GÜNCEL. Eğitim verilerindeki eski bilgileri değil,")
+                            appendLine("aşağıdaki arama sonuçlarını kullanarak yanıt ver.")
+                            appendLine()
+                            appendLine("=== GÜNCEL WEB ARAMA SONUÇLARI ===")
+                            append(searchResults)
+                            appendLine()
+                            appendLine("=== ARAMA SONUÇLARI SONU ===")
+                            appendLine()
+                            if (existingAnnotated.isNotBlank()) {
+                                appendLine()
+                                appendLine(existingAnnotated)
+                            } else {
+                                append("Kullanıcı mesajı: $msgText")
+                            }
+                        }
+                        val updated = existing.copy(annotatedContent = annotated)
+                        modified[lastIdx] = updated
+                        currentMessages[lastIdx] = updated
+                    }
+                    MainActivity.log("Maya", "Web arama tamamlandı: ${searchResults.length} karakter, modele iletildi")
+                    modified.toList()
+                } else {
+                    MainActivity.log("Maya", "Web arama sonuç döndürmedi (motor: $webSearchEngine, sorgu: \"$searchQuery\")")
+                    currentMessages.toList()
+                }
+                sendMessageContent(messagesToSend)
+            }
+        } else {
+            sendMessageContent(currentMessages.toList())
+        }
+    } else {
+        sendMessageContent(currentMessages.toList())
+    }
+}
+
+internal fun MainActivity.stopGeneration() {
+    generationJob?.cancel(); generationJob = null
+    isGenerating = false; updateFabIcon()
+    generationService?.onGenerationCancelled(); generationService = null
+    try { unbindService(serviceConnection) } catch (_: Exception) {}
+}
+
+// ── Mesaj düzenleme / yeniden oluştur ────────────────────────────────────────
+
+internal fun MainActivity.showEditMessageDialog(position: Int, currentContent: String) {
+    if (isGenerating) { Toast.makeText(this, "Yanıt üretilirken düzenleme yapılamaz", Toast.LENGTH_SHORT).show(); return }
+    val input = android.widget.EditText(this).apply {
+        setText(currentContent); setSelection(currentContent.length); setPadding(48, 24, 48, 24)
+    }
+    android.app.AlertDialog.Builder(this).setTitle("Mesajı Düzenle").setView(input)
+        .setPositiveButton("Gönder") { _, _ ->
+            val newText = input.text.toString().trim()
+            if (newText.isNotEmpty() && newText != currentContent) editAndResend(position, newText)
+        }.setNegativeButton("İptal", null).show()
+}
+
+internal fun MainActivity.editAndResend(position: Int, newContent: String) {
+    val convId = currentConversationId
+    while (currentMessages.size > position) currentMessages.removeAt(currentMessages.size - 1)
+    currentMessages.add(ChatMessage(content = newContent, isUser = true, timestamp = System.currentTimeMillis()))
+    messageAdapter.submitList(currentMessages.toList())
+    autoScroll = true
+    lifecycleScope.launch(Dispatchers.IO) {
+        db.chatDao().deleteMessages(convId)
+        currentMessages.forEachIndexed { idx, msg ->
+            db.chatDao().insertMessage(DbMessage(
+                id = UUID.randomUUID().toString(), conversationId = convId,
+                role = if (msg.isUser) "user" else "assistant", content = msg.content,
+                timestamp = System.currentTimeMillis() + idx, tps = msg.tokensPerSecond,
+                imagePath = msg.imagePath
+            ))
+        }
+    }
+    sendMessageContent(currentMessages.toList())
+}
+
+internal fun MainActivity.regenerateLastResponse() {
+    if (isGenerating) { Toast.makeText(this, "Yanıt üretilirken yeniden oluşturulamaz", Toast.LENGTH_SHORT).show(); return }
+    if (loadedModelPath == null) { Toast.makeText(this, "Önce bir model yükleyin", Toast.LENGTH_SHORT).show(); return }
+    if (currentMessages.isNotEmpty() && !currentMessages.last().isUser) currentMessages.removeAt(currentMessages.size - 1)
+    if (currentMessages.isEmpty() || !currentMessages.last().isUser) return
+    messageAdapter.submitList(currentMessages.toList())
+    autoScroll = true
+    val convId = currentConversationId
+    lifecycleScope.launch(Dispatchers.IO) {
+        val dbMessages = db.chatDao().getMessages(convId)
+        val lastAssistant = dbMessages.lastOrNull { it.role == "assistant" }
+        lastAssistant?.let { msg ->
+            db.chatDao().deleteMessages(convId)
+            dbMessages.filter { it.id != msg.id }.forEach { db.chatDao().insertMessage(it) }
+        }
+    }
+    sendMessageContent(currentMessages.toList())
+}
+
+// ── Bypass Context Length yardımcıları ───────────────────────────────────────
+
+internal fun MainActivity.estimateTokenCount(text: String): Int =
+    (text.length / 3.5).toInt() + 8
+
+internal fun MainActivity.truncateMessagesForBypass(messages: List<ChatMessage>): List<ChatMessage> {
+    val sysTokens  = estimateTokenCount(applyPersona(systemPrompt)) + 30
+    val reserved   = sysTokens + predictLength + 256
+    val available  = contextSize - reserved
+
+    if (available <= 50) {
+        return messages.filter { it.isUser }.takeLast(1)
+    }
+
+    val result     = mutableListOf<ChatMessage>()
+    var usedTokens = 0
+
+    for (msg in messages.reversed()) {
+        val msgTokens = estimateTokenCount(msg.content) + 20
+        if (usedTokens + msgTokens > available && result.isNotEmpty()) break
+        result.add(0, msg)
+        usedTokens += msgTokens
+    }
+
+    while (result.isNotEmpty() && !result.first().isUser) result.removeFirst()
+
+    if (result.isEmpty()) {
+        messages.lastOrNull { it.isUser }?.let { result.add(it) }
+    }
+
+    return result
+}
+
+internal fun MainActivity.buildFormattedPromptFull(messages: List<ChatMessage>): String {
+    if (selectedTemplate != 0) {
+        return buildFormattedPrompt(messages)
+    }
+    val sp = applyPersona(systemPrompt)
+    val sb = StringBuilder()
+    if (sp.isNotEmpty()) {
+        sb.append("<|im_start|>system\n$sp<|im_end|>\n")
+    }
+    for (msg in messages) {
+        if (msg.isUser) {
+            val rawContent = msg.annotatedContent ?: msg.content
+            val body = applyPersona(if (noThinking) "$rawContent/no_think" else rawContent)
+            sb.append("<|im_start|>user\n$body<|im_end|>\n")
+        } else {
+            sb.append("<|im_start|>assistant\n${msg.content}<|im_end|>\n")
+        }
+    }
+    sb.append("<|im_start|>assistant\n")
+    if (!noThinking) sb.append("<think>\n")
+    return sb.toString()
+}
+
+// ── Prompt oluşturma ──────────────────────────────────────────────────────────
+
+internal fun MainActivity.modelContent(msg: ChatMessage): String =
+    if (msg.isUser) msg.annotatedContent ?: msg.content else msg.content
+
+internal fun MainActivity.buildFormattedPrompt(messages: List<ChatMessage>): String {
+    val sp = applyPersona(systemPrompt)
+    if (selectedTemplate == 0) {
+        val lastUser = messages.lastOrNull { it.isUser } ?: return ""
+        val lastUserText = modelContent(lastUser)
+        val processed = applyPersona(if (noThinking) "$lastUserText/no_think" else lastUserText)
+        return processed
+    }
+    val sb = StringBuilder()
+    when (selectedTemplate) {
+        1 -> {
+            sb.append("<BOS_TOKEN>")
+            if (sp.isNotEmpty()) sb.append("<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>$sp<|END_OF_TURN_TOKEN|>")
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val body = applyPersona(if (noThinking) "${modelContent(msg)}/no_think" else modelContent(msg))
+                    sb.append("<|START_OF_TURN_TOKEN|><|USER_TOKEN|>$userName: $body<|END_OF_TURN_TOKEN|>")
+                } else sb.append("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>${msg.content}<|END_OF_TURN_TOKEN|>")
+            }
+            sb.append("<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>$charName: ")
+        }
+        2 -> {
+            if (sp.isNotEmpty()) sb.append("<|im_start|>system\n$sp<|im_end|>\n")
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val body = applyPersona(if (noThinking) "${modelContent(msg)}/no_think" else modelContent(msg))
+                    sb.append("<|im_start|>user\n$userName: $body<|im_end|>\n")
+                } else sb.append("<|im_start|>assistant\n${msg.content}<|im_end|>\n")
+            }
+            sb.append("<|im_start|>assistant\n$charName: ")
+        }
+        3 -> {
+            // Gemma 3 — <start_of_turn> / <end_of_turn>
+            var systemInjected = false
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val prefix = if (!systemInjected && sp.isNotEmpty()) { systemInjected = true; "$sp\n\n" } else ""
+                    val body = applyPersona(modelContent(msg))
+                    sb.append("<start_of_turn>user\n$prefix$userName: $body<end_of_turn>\n")
+                } else sb.append("<start_of_turn>model\n${msg.content}<end_of_turn>\n")
+            }
+            sb.insert(0, "<bos>")
+            sb.append("<start_of_turn>model\n$charName: ")
+        }
+        4 -> {
+            sb.append("<|begin_of_text|>")
+            if (sp.isNotEmpty()) sb.append("<|start_header_id|>system<|end_header_id|>\n\n$sp<|eot_id|>")
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val body = applyPersona(modelContent(msg))
+                    sb.append("<|start_header_id|>user<|end_header_id|>\n\n$userName: $body<|eot_id|>")
+                } else sb.append("<|start_header_id|>assistant<|end_header_id|>\n\n${msg.content}<|eot_id|>")
+            }
+            sb.append("<|start_header_id|>assistant<|end_header_id|>\n\n$charName: ")
+        }
+        5 -> {
+            if (sp.isNotEmpty()) {
+                sb.append("<|start_of_role|>system<|end_of_role|>$sp<|end_of_text|>\n")
+            }
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val body = applyPersona(modelContent(msg))
+                    sb.append("<|start_of_role|>user<|end_of_role|>$userName: $body<|end_of_text|>\n")
+                } else {
+                    sb.append("<|start_of_role|>assistant<|end_of_role|>${msg.content}<|end_of_text|>\n")
+                }
+            }
+            sb.append("<|start_of_role|>assistant<|end_of_role|>$charName: ")
+        }
+        6 -> {
+            val t = activeCustomTemplate()
+            if (t != null) {
+                if (t.bosToken.isNotEmpty()) sb.append(t.bosToken)
+                if (sp.isNotEmpty() && t.sysPrefix.isNotEmpty()) {
+                    sb.append("${t.sysPrefix}$sp${t.sysSuffix}")
+                }
+                for (msg in messages) {
+                    if (msg.isUser) {
+                        val body = applyPersona(modelContent(msg))
+                        sb.append("${t.inputPrefix}$userName: $body${t.inputSuffix}")
+                    } else {
+                        sb.append("${t.outputPrefix}${msg.content}${t.outputSuffix}")
+                    }
+                }
+                sb.append("${t.lastOutputPrefix}$charName: ")
+            }
+        }
+        7 -> {
+            // Gemma 4 — <|turn>role\n ... <turn|>\n
+            // System turn: sistem promptu + think token (noThinking=false ise)
+            val hasSystem = sp.isNotEmpty()
+            val useThink  = !noThinking
+            if (hasSystem || useThink) {
+                sb.append("<|turn>system\n")
+                if (useThink) sb.append("<|think|>")
+                if (hasSystem) sb.append(sp)
+                sb.append("<turn|>\n")
+            }
+            for (msg in messages) {
+                if (msg.isUser) {
+                    val body = applyPersona(modelContent(msg))
+                    sb.append("<|turn>user\n$userName: $body<turn|>\n")
+                } else {
+                    // Geçmiş model yanıtları: <|channel> bloğunu temizle, düz metin yaz
+                    val clean = msg.content
+                        .replace(Regex("<\\|channel>.*?<channel\\|>", RegexOption.DOT_MATCHES_ALL), "")
+                        .trim()
+                    sb.append("<|turn>model\n${clean}<turn|>\n")
+                }
+            }
+            sb.insert(0, "<bos>")
+            // Generation prompt — think etkinse <|think|> ile başlasın
+            sb.append("<|turn>model\n$charName: ")
+            if (useThink) sb.append("<|channel>")
+        }
+    }
+    return sb.toString()
+}
+
+internal fun MainActivity.buildVisionPrompt(userContent: String): String {
+    val body = applyPersona(userContent)
+    return when (selectedTemplate) {
+        0    -> body
+        1    -> "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>$userName: $body<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>$charName: "
+        2    -> "<|im_start|>user\n$userName: $body<|im_end|>\n<|im_start|>assistant\n$charName: "
+        3    -> "<start_of_turn>user\n$userName: $body<end_of_turn>\n<start_of_turn>model\n$charName: "
+        4    -> "<|start_header_id|>user<|end_header_id|>\n\n$userName: $body<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n$charName: "
+        5    -> "<|start_of_role|>user<|end_of_role|>$userName: $body<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>$charName: "
+        6    -> activeCustomTemplate()?.let { t ->
+                     val bos = t.bosToken
+                     "$bos${t.inputPrefix}$userName: $body${t.inputSuffix}${t.lastOutputPrefix}$charName: "
+                 } ?: body
+        7    -> {
+            // Gemma 4 vision: tek user turn, ardından model turn
+            val useThink = !noThinking
+            buildString {
+                append("<bos>")
+                if (useThink) {
+                    append("<|turn>system\n<|think|><turn|>\n")
+                }
+                append("<|turn>user\n$userName: $body<turn|>\n")
+                append("<|turn>model\n$charName: ")
+                if (useThink) append("<|channel>")
+            }
+        }
+        else -> body
+    }
+}
+
+// ── Üretim döngüsü ────────────────────────────────────────────────────────────
+
+internal fun MainActivity.sendMessageContent(messages: List<ChatMessage>) {
+    if (loadedModelPath == null) { Toast.makeText(this, "Önce bir model yükleyin", Toast.LENGTH_SHORT).show(); return }
+
+    val serviceIntent = Intent(this, MayaForegroundService::class.java)
+    startService(serviceIntent)
+    bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+
+    val convId = currentConversationId
+    isGenerating = true; tokenUpdateCounter = 0; updateFabIcon()
+    val responseBuilder = StringBuilder()
+    var tokenCount = 0
+    var generationStartTime = 0L
+
+    val lastUserMsg = messages.lastOrNull { it.isUser }
+    val pendingImagePath = lastUserMsg?.imagePath
+
+    val formattedText = buildFormattedPrompt(messages)
+    MainActivity.log("Maya", "sendMessageContent: template=$selectedTemplate turns=${messages.size} " +
+        "noThinking=$noThinking predictLength=$predictLength hasImage=${pendingImagePath != null} " +
+        "bypass=$bypassContextLength")
+
+    generationJob = lifecycleScope.launch {
+        var waited = 0
+        while (generationService == null && waited < 20) { kotlinx.coroutines.delay(50); waited++ }
+        generationService?.onGenerationStarted()
+        messageAdapter.isStreaming = true
+
+        try {
+            val impl = engine as? InferenceEngineImpl
+
+            val tokenFlow = when {
+                pendingImagePath != null && impl != null && impl.isMmprojLoaded -> {
+                    val visionPrompt = buildVisionPrompt(lastUserMsg?.content ?: "")
+                    MainActivity.log("Maya", "Vision modu: görüntü gömülüyor")
+                    impl.sendUserPromptWithImage(visionPrompt, pendingImagePath, predictLength)
+                }
+                bypassContextLength && impl != null -> {
+                    val truncated  = truncateMessagesForBypass(messages)
+                    val fullPrompt = buildFormattedPromptFull(truncated)
+                    val dropped    = messages.size - truncated.size
+                    if (dropped > 0) {
+                        MainActivity.log("Maya", "Bypass: ${messages.size} mesajdan $dropped tanesi atıldı, " +
+                                "${truncated.size} mesaj encode ediliyor (${fullPrompt.length} karakter)")
+                    } else {
+                        MainActivity.log("Maya", "Bypass: ${truncated.size} mesaj encode ediliyor " +
+                                "(${fullPrompt.length} karakter)")
+                    }
+                    impl.sendBypassPrompt(fullPrompt, predictLength)
+                }
+                else -> {
+                    if (pendingImagePath != null) {
+                        MainActivity.log("Maya", "UYARI: Görüntü var ama mmproj yüklü değil, düz metin olarak gönderiliyor")
+                    }
+                    engine.sendUserPrompt(formattedText, predictLength = predictLength)
+                }
+            }
+
+            tokenFlow.collect { token ->
+                val cleaned = token
+                    .replace("<|END_OF_TURN_TOKEN|>", "")
+                    .replace("<|START_OF_TURN_TOKEN|>", "")
+                    .replace("<|USER_TOKEN|>", "")
+                    .replace("<|CHATBOT_TOKEN|>", "")
+                    .replace("<|START_RESPONSE|>", "")
+                    .replace("<|END_RESPONSE|>", "")
+                    .replace("<end_of_turn>", "")
+                    .replace("<start_of_turn>", "")
+                    .replace("<|eot_id|>", "")
+                    .replace("<|im_end|>", "")
+                    .replace("<|end_of_text|>", "")
+                    .replace("<|start_of_role|>", "")
+                    .replace("<|end_of_role|>", "")
+                    // Gemma 4 stop tokenları
+                    .replace("<turn|>", "")
+                    .replace("<|turn>", "")
+                    // Gemma 4 think channel tokenları — channel içeriği düz metin olarak göster
+                    .replace("<|channel>", "")
+                    .replace("<channel|>", "")
+                    .let { t ->
+                        if (selectedTemplate == 6) {
+                            val stop = activeCustomTemplate()?.stopSeq ?: ""
+                            if (stop.isNotEmpty()) t.replace(stop, "") else t
+                        } else t
+                    }
+                if (tokenCount == 0) generationStartTime = System.currentTimeMillis()
+                responseBuilder.append(cleaned)
+                tokenCount++; tokenUpdateCounter++
+                if (tokenUpdateCounter % 8 == 0) {
+                    val snapshot = stripCharPrefix(responseBuilder.toString())
+                    messageAdapter.updateLastAssistantMessage(snapshot)
+                    if (autoScroll && !scrollPending) {
+                        scrollPending = true
+                        messagesRv.post {
+                            scrollPending = false
+                            if (autoScroll) {
+                                isAutoScrolling = true
+                                messagesRv.scrollToPosition(messageAdapter.itemCount - 1)
+                                messagesRv.post { isAutoScrolling = false }
+                            }
+                        }
+                    }
+                }
+                if (tokenUpdateCounter % 20 == 0) {
+                    generationService?.onTokenUpdate(responseBuilder.toString())
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            MainActivity.log("Maya", "Üretim kullanıcı tarafından durduruldu. ${responseBuilder.length} karakter üretildi.")
+            throw e
+        } catch (e: Exception) {
+            val current = responseBuilder.toString()
+            messageAdapter.updateLastAssistantMessage(
+                if (current.isEmpty()) "[Hata: ${e.message}]" else current
+            )
+        } finally {
+            val fullResponse = stripCharPrefix(responseBuilder.toString())
+            val elapsedSec = (System.currentTimeMillis() - generationStartTime) / 1000f
+            val tps = if (elapsedSec > 0f && tokenCount > 0) tokenCount / elapsedSec else null
+
+            messageAdapter.isStreaming = false
+
+            if (currentMessages.isNotEmpty() && !currentMessages.last().isUser) {
+                currentMessages[currentMessages.size - 1] = ChatMessage(fullResponse, false, tps, System.currentTimeMillis())
+            } else {
+                currentMessages.add(ChatMessage(fullResponse, false, tps, System.currentTimeMillis()))
+            }
+            messageAdapter.updateLastAssistantMessage(fullResponse, tps)
+            if (fullResponse.isNotEmpty()) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    db.chatDao().insertMessage(DbMessage(
+                        UUID.randomUUID().toString(), convId, "assistant", fullResponse,
+                        System.currentTimeMillis(), tps
+                    ))
+                    db.chatDao().touchConversation(convId, System.currentTimeMillis())
+                }
+            }
+
+            val userMsgCount = currentMessages.count { it.isUser }
+            if (userMsgCount == 1 && convId !in skipAutoTitleConvIds && fullResponse.isNotEmpty() && loadedModelPath != null) {
+                val firstUserText = currentMessages.firstOrNull { it.isUser }?.content ?: ""
+                if (firstUserText.isNotEmpty()) {
+                    skipAutoTitleConvIds.add(convId)
+                    getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit()
+                        .putStringSet("skip_auto_title_convs", skipAutoTitleConvIds.toSet()).apply()
+                    generateConversationTitle(convId, firstUserText)
+                }
+            }
+            MainActivity.log("Maya", "Üretim bitti: ${fullResponse.length} karakter")
+            isGenerating = false; autoScroll = true; updateFabIcon()
+            generationService?.onGenerationFinished(fullResponse, isAppInForeground)
+            generationService = null
+            try { unbindService(serviceConnection) } catch (_: Exception) {}
+        }
+    }
+}
+
+// ── Otomatik sohbet başlığı ───────────────────────────────────────────────────
+
+internal fun MainActivity.buildTitlePrompt(userText: String): String {
+    val instruction = "Bu sohbet için 3-5 kelimelik kısa bir başlık yaz. Sadece başlığı yaz, başka hiçbir şey ekleme:\n\n${userText.take(300)}"
+    return when (selectedTemplate) {
+        0    -> instruction
+        1    -> "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$instruction<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+        2    -> "<|im_start|>user\n$instruction<|im_end|>\n<|im_start|>assistant\n"
+        3    -> "<bos><start_of_turn>user\n$instruction<end_of_turn>\n<start_of_turn>model\n"
+        4    -> "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$instruction<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        5    -> "<|start_of_role|>user<|end_of_role|>$instruction<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+        6    -> activeCustomTemplate()?.let { t ->
+                     "${t.bosToken}${t.inputPrefix}$instruction${t.inputSuffix}${t.lastOutputPrefix}"
+                 } ?: instruction
+        7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
+        else -> instruction
+    }
+}
+
+internal fun MainActivity.generateConversationTitle(convId: String, userText: String) {
+    lifecycleScope.launch {
+        try {
+            val prompt = buildTitlePrompt(userText)
+            val sb = StringBuilder()
+            engine.sendUserPrompt(prompt, predictLength = 30).collect { token -> sb.append(token) }
+
+            val rawTitle = sb.toString()
+                .replace(Regex("<[^>]+>"), "").replace("|im_end|", "").replace("|eot_id|", "")
+                .replace("<end_of_turn>", "").replace("<|eot_id|>", "")
+                .replace("<turn|>", "").replace("<|turn>", "")
+                .replace("<|channel>", "").replace("<channel|>", "")
+                .trim().lines().firstOrNull { it.isNotBlank() }?.trim() ?: ""
+
+            val cleanTitle = rawTitle
+                .removePrefix("\"").removeSuffix("\"")
+                .removePrefix("'").removeSuffix("'")
+                .removePrefix("*").removeSuffix("*")
+                .removePrefix("#").trim()
+
+            if (cleanTitle.length in 2..80) {
+                withContext(Dispatchers.IO) {
+                    db.chatDao().updateConversationTitle(convId, cleanTitle, System.currentTimeMillis())
+                }
+                if (convId == currentConversationId) updateToolbarTitle(cleanTitle)
+            }
+        } catch (e: Exception) {
+            MainActivity.log("Maya", "Başlık üretimi başarısız: ${e.message}")
+        }
+    }
+}
