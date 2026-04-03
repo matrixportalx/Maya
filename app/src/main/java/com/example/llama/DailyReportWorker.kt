@@ -60,14 +60,16 @@ class DailyReportWorker(
         private const val MAX_DESC_CHARS    = 400
 
         // Şablon index → formatlama mantığı için isimler (bilgi amaçlı)
+        // Index 7 = Gemma 4
         val TEMPLATE_NAMES = arrayOf(
             "Otomatik (GGUF'tan)",
             "Aya / Command-R",
             "ChatML",
-            "Gemma",
+            "Gemma 3",
             "Llama 3",
             "Granite",
-            "Özel Şablon"
+            "Özel Şablon",
+            "Gemma 4"
         )
     }
 
@@ -76,7 +78,6 @@ class DailyReportWorker(
     private var profileName = "Günlük Rapor"
 
     override suspend fun doWork(): Result {
-        // Profil yükle — inputData'dan profileId oku
         val pid = inputData.getString("profile_id")
         val prefs   = applicationContext.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         val profile = if (pid != null) ReportProfile.loadAll(applicationContext).find { it.id == pid } else null
@@ -169,7 +170,6 @@ class DailyReportWorker(
         prefs: android.content.SharedPreferences,
         customPrompt: String = ""
     ): String {
-        // ── Rapor modeli önceliği: report_model_entry → last_loaded_model ──────
         val reportModelEntry = prefs.getString(KEY_REPORT_MODEL_ENTRY, null)
         val lastEntry = when {
             !reportModelEntry.isNullOrEmpty() -> {
@@ -192,7 +192,6 @@ class DailyReportWorker(
             Log.w(TAG, "Model önbellekte yok: $lastEntry"); return ""
         }
 
-        // ── Rapor modeli ayarları ─────────────────────────────────────────────
         val reportTemplate = prefs.getInt(KEY_REPORT_MODEL_TEMPLATE, -1)
             .let { if (it < 0) null else it }
         val reportNoThink  = prefs.getBoolean(KEY_REPORT_MODEL_NO_THINK, false)
@@ -202,7 +201,6 @@ class DailyReportWorker(
         return try {
             val eng = InferenceEngineImpl.getInstance(applicationContext)
 
-            // Engine hazır olana kadar bekle
             var waited = 0
             while (eng.state.value is InferenceEngine.State.Uninitialized ||
                    eng.state.value is InferenceEngine.State.Initializing) {
@@ -210,7 +208,6 @@ class DailyReportWorker(
                 delay(200)
             }
 
-            // Üretim sırasındaysa vazgeç
             val st = eng.state.value
             if (st is InferenceEngine.State.Generating ||
                 st is InferenceEngine.State.ProcessingUserPrompt ||
@@ -218,7 +215,6 @@ class DailyReportWorker(
                 Log.w(TAG, "Engine meşgul, özet atlandı"); return ""
             }
 
-            // Eski model yüklüyse temizle
             if (st is InferenceEngine.State.ModelReady || st is InferenceEngine.State.Error) {
                 eng.cleanUp()
                 waited = 0
@@ -231,18 +227,16 @@ class DailyReportWorker(
                 Log.e(TAG, "Engine Initialized değil: ${eng.state.value}"); return ""
             }
 
-            // Ayarları uygula — context size profilden gelir (coerceAtLeast ile özet için minimum 8192)
             eng.applySettings(
                 contextSize   = prefs.getInt("report_context_size", 8192).coerceIn(2048, 32768),
                 temperature   = prefs.getFloat("temperature", 0.7f),
                 topP          = prefs.getFloat("top_p", 0.95f),
                 topK          = prefs.getInt("top_k", 40),
-                flashAttnMode = prefs.getInt("flash_attn_mode", 1),  // 0=Kapalı, 1=Otomatik, 2=Açık
+                flashAttnMode = prefs.getInt("flash_attn_mode", 1),
                 useMmap       = prefs.getBoolean("use_mmap", true),
                 useMlock      = prefs.getBoolean("use_mlock", false)
             )
 
-            // Model yükle
             eng.loadModel(modelPath)
             waited = 0
             while (eng.state.value !is InferenceEngine.State.ModelReady) {
@@ -252,21 +246,13 @@ class DailyReportWorker(
             Log.i(TAG, "Model hazır, özet üretimi başlıyor")
             setForeground(buildProgressForeground("✍️ Özet oluşturuluyor…"))
 
-            // Özet promptu ve üretim:
-            // templateIndex=null → "Model varsayılanı" → Jinja çalışsın, sendUserPrompt kullan.
-            //   /no_think bu durumda ham mesaj olarak gönderilir; Jinja turn sonuna koyar.
-            // templateIndex!=null → Bypass path: Jinja atlanır, format elle oluşturulur.
-            //   /no_think turn kapanış tokenından HEMEN ÖNCE eklenir (doğru konum).
             val resultSb = StringBuilder()
             val impl = eng as? com.arm.aichat.internal.InferenceEngineImpl
             if (impl != null && reportTemplate != null) {
-                // Bypass path — template biliniyor, Jinja bypass
                 val prompt = buildBypassSummaryPrompt(rawData, customPrompt, reportNoThink, reportTemplate)
                 Log.i(TAG, "Bypass path: template=$reportTemplate prompt=${prompt.length} karakter")
                 impl.sendBypassPrompt(prompt, 2048).collect { resultSb.append(it) }
             } else {
-                // Jinja path — "Model varsayılanı" veya impl null
-                // /no_think ham mesaja eklenir; Jinja doğru turn sonuna koyar
                 val baseContent = buildString {
                     if (customPrompt.isNotEmpty()) {
                         append(customPrompt)
@@ -299,13 +285,18 @@ class DailyReportWorker(
                 .replace("<|eot_id|>", "")
                 .replace("<end_of_turn>", "")
                 .replace("<|endoftext|>", "")
-                .replace(Regex("<\\|[^|]+\\|>"), "") // genel stop token temizleyici
-                // Qwen3 <think> bloğunu temizle (no_think kapalıysa da güvenlik için)
+                // Gemma 4 stop tokenları
+                .replace("<turn|>", "")
+                .replace("<|turn>", "")
+                // Gemma 4 think channel — içeriği koru, sadece marker'ları sil
+                .replace("<|channel>", "")
+                .replace("<channel|>", "")
+                .replace(Regex("<\\|[^|]+\\|>"), "")
+                // Qwen3 <think> bloğunu temizle
                 .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
                 .trim()
             Log.i(TAG, "Özet: ${result.length} karakter")
 
-            // Modeli serbest bırak
             try {
                 if (eng.state.value is InferenceEngine.State.ModelReady) {
                     eng.cleanUp(); Log.i(TAG, "Model serbest bırakıldı")
@@ -324,9 +315,7 @@ class DailyReportWorker(
             val fileName = raw.substringAfterLast("%2F").substringAfterLast("/")
                 .let { if (it.isBlank()) raw.substringAfterLast("/") else it }
             listOfNotNull(
-                // Yeni kalıcı konum (getExternalFilesDir("models"))
                 applicationContext.getExternalFilesDir("models")?.let { File(it, "model_$fileName") },
-                // Geriye dönük uyumluluk: eski externalCacheDir konumu
                 applicationContext.externalCacheDir?.let { File(it, "model_$fileName") },
                 File(applicationContext.cacheDir, "model_$fileName")
             ).firstOrNull { it.exists() && it.length() > 0 }?.absolutePath
@@ -336,22 +325,9 @@ class DailyReportWorker(
     }
 
     /**
-     * Özet promptunu oluşturur.
-     * [noThink] true ise Qwen3 düşünme modunu kapatmak için /no_think eklenir;
-     * diğer modeller bu etiketi görmezden gelir.
-     */
-    /**
      * Bypass path için tam formatlanmış özet promptu oluşturur.
-     * Jinja template bypass edildiğinden <think> bloğu eklenmez.
-     * [templateIndex]: 0=otomatik/ChatML, 2=ChatML, 3=Gemma, 4=Llama3, diğerleri=ChatML
-     * [noThink]: true ise /no_think kullanıcı turn'ünün sonuna eklenir.
-     */
-    /**
-     * Bypass path için tam formatlanmış özet promptu oluşturur.
-     * Her format için /no_think, turn kapanış tokenından HEMEN ÖNCE eklenir —
-     * böylece model komutu metin olarak değil sinyal olarak okur.
-     * templateIndex=null → Model varsayılanı → sendUserPrompt fallback kullanılır,
-     * bu fonksiyon çağrılmaz (çağıran kod bunu kontrol eder).
+     * templateIndex=7 → Gemma 4 formatı.
+     * noThink=true ise think token eklenmez.
      */
     private fun buildBypassSummaryPrompt(
         rawData: String,
@@ -377,30 +353,37 @@ class DailyReportWorker(
             appendLine(rawData.take(15000))
             append("=== SON ===")
         }
-        // /no_think her format için turn kapanış tokenından hemen önce eklenir
         val noThinkSuffix = if (noThink) "\n/no_think" else ""
 
         return when (templateIndex) {
-            3    -> // Gemma — /no_think <end_of_turn>'dan önce
+            3    -> // Gemma 3
                 "<bos><start_of_turn>user\n$baseContent$noThinkSuffix<end_of_turn>\n<start_of_turn>model\n"
-            4    -> // Llama 3 — /no_think <|eot_id|>'dan önce
+            4    -> // Llama 3
                 "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$baseContent$noThinkSuffix<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
             1    -> // Aya / Command-R
                 "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$baseContent$noThinkSuffix<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
             5    -> // Granite
                 "<|start_of_role|>user<|end_of_role|>$baseContent$noThinkSuffix<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
-            else -> // ChatML (index 0, 2) — /no_think <|im_end|>'dan önce
+            7    -> {
+                // Gemma 4 — think token system turn'de, noThink=true ise yok
+                val useThink = !noThink
+                buildString {
+                    append("<bos>")
+                    if (useThink) {
+                        append("<|turn>system\n<|think|><turn|>\n")
+                    }
+                    append("<|turn>user\n$baseContent<turn|>\n")
+                    append("<|turn>model\n")
+                    if (useThink) append("<|channel>")
+                }
+            }
+            else -> // ChatML (index 0, 2) — varsayılan
                 "<|im_start|>user\n$baseContent$noThinkSuffix<|im_end|>\n<|im_start|>assistant\n"
         }
     }
 
     // ── RSS ───────────────────────────────────────────────────────────────────
 
-    /**
-     * RSS feed'ini çeker ve her item için:
-     * - [fetchFullArticle = true]  → <link> URL'sine gidip tam makale metnini indirir
-     * - [fetchFullArticle = false] → yalnızca <description> snippet'ini kullanır
-     */
     private fun fetchRss(url: String, count: Int, fetchFullArticle: Boolean): String {
         val xml = httpGet(url, mapOf(
             "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36",
