@@ -213,6 +213,7 @@ private fun MainActivity.continueWithWebSearch(
 
                     val today = java.text.SimpleDateFormat("d MMMM yyyy, EEEE", java.util.Locale("tr")).format(java.util.Date())
 
+                    // Web arama sonuçlarını mevcut annotatedContent'in üzerine ekle
                     val modified = currentMessages.toMutableList()
                     val lastIdx = modified.indexOfLast { it.isUser }
                     if (lastIdx >= 0) {
@@ -230,6 +231,7 @@ private fun MainActivity.continueWithWebSearch(
                             appendLine()
                             appendLine("=== ARAMA SONUÇLARI SONU ===")
                             appendLine()
+                            // Eğer URL içeriği zaten varsa, onu da koru
                             if (existingAnnotated.isNotBlank()) {
                                 appendLine()
                                 appendLine(existingAnnotated)
@@ -255,66 +257,6 @@ private fun MainActivity.continueWithWebSearch(
     } else {
         sendMessageContent(currentMessages.toList())
     }
-}
-
-internal fun MainActivity.stopGeneration() {
-    generationJob?.cancel(); generationJob = null
-    isGenerating = false; updateFabIcon()
-    generationService?.onGenerationCancelled(); generationService = null
-    try { unbindService(serviceConnection) } catch (_: Exception) {}
-}
-
-// ── Mesaj düzenleme / yeniden oluştur ────────────────────────────────────────
-
-internal fun MainActivity.showEditMessageDialog(position: Int, currentContent: String) {
-    if (isGenerating) { Toast.makeText(this, "Yanıt üretilirken düzenleme yapılamaz", Toast.LENGTH_SHORT).show(); return }
-    val input = android.widget.EditText(this).apply {
-        setText(currentContent); setSelection(currentContent.length); setPadding(48, 24, 48, 24)
-    }
-    android.app.AlertDialog.Builder(this).setTitle("Mesajı Düzenle").setView(input)
-        .setPositiveButton("Gönder") { _, _ ->
-            val newText = input.text.toString().trim()
-            if (newText.isNotEmpty() && newText != currentContent) editAndResend(position, newText)
-        }.setNegativeButton("İptal", null).show()
-}
-
-internal fun MainActivity.editAndResend(position: Int, newContent: String) {
-    val convId = currentConversationId
-    while (currentMessages.size > position) currentMessages.removeAt(currentMessages.size - 1)
-    currentMessages.add(ChatMessage(content = newContent, isUser = true, timestamp = System.currentTimeMillis()))
-    messageAdapter.submitList(currentMessages.toList())
-    autoScroll = true
-    lifecycleScope.launch(Dispatchers.IO) {
-        db.chatDao().deleteMessages(convId)
-        currentMessages.forEachIndexed { idx, msg ->
-            db.chatDao().insertMessage(DbMessage(
-                id = UUID.randomUUID().toString(), conversationId = convId,
-                role = if (msg.isUser) "user" else "assistant", content = msg.content,
-                timestamp = System.currentTimeMillis() + idx, tps = msg.tokensPerSecond,
-                imagePath = msg.imagePath
-            ))
-        }
-    }
-    sendMessageContent(currentMessages.toList())
-}
-
-internal fun MainActivity.regenerateLastResponse() {
-    if (isGenerating) { Toast.makeText(this, "Yanıt üretilirken yeniden oluşturulamaz", Toast.LENGTH_SHORT).show(); return }
-    if (loadedModelPath == null) { Toast.makeText(this, "Önce bir model yükleyin", Toast.LENGTH_SHORT).show(); return }
-    if (currentMessages.isNotEmpty() && !currentMessages.last().isUser) currentMessages.removeAt(currentMessages.size - 1)
-    if (currentMessages.isEmpty() || !currentMessages.last().isUser) return
-    messageAdapter.submitList(currentMessages.toList())
-    autoScroll = true
-    val convId = currentConversationId
-    lifecycleScope.launch(Dispatchers.IO) {
-        val dbMessages = db.chatDao().getMessages(convId)
-        val lastAssistant = dbMessages.lastOrNull { it.role == "assistant" }
-        lastAssistant?.let { msg ->
-            db.chatDao().deleteMessages(convId)
-            dbMessages.filter { it.id != msg.id }.forEach { db.chatDao().insertMessage(it) }
-        }
-    }
-    sendMessageContent(currentMessages.toList())
 }
 
 // ── Bypass Context Length yardımcıları ───────────────────────────────────────
