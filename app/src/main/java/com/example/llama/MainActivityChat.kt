@@ -203,11 +203,13 @@ private fun MainActivity.continueWithWebSearch(
                 val searchResults = withContext(Dispatchers.IO) { performWebSearch(searchQuery) }
                 supportActionBar?.title = savedTitle
 
-                val messagesToSend = if (searchResults.isNotEmpty()) {
+                val messagesToSend: List<ChatMessage>
+                val searchResultsNotEmpty = searchResults.isNotEmpty()
+                
+                if (searchResultsNotEmpty) {
                     lastWebSearchResults = searchResults
                     lastWebSearchQuery   = searchQuery
-                }
-
+    
                     val motorName = when (webSearchEngine) {
                         "brave"   -> "Brave Search"
                         "searxng" -> "SearXNG ($searxngUrl)"
