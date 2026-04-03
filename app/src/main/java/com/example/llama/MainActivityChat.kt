@@ -206,6 +206,7 @@ private fun MainActivity.continueWithWebSearch(
                 val messagesToSend = if (searchResults.isNotEmpty()) {
                     lastWebSearchResults = searchResults
                     lastWebSearchQuery   = searchQuery
+                }
 
                     val motorName = when (webSearchEngine) {
                         "brave"   -> "Brave Search"
