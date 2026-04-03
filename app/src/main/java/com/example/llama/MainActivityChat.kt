@@ -129,6 +129,7 @@ internal fun MainActivity.sendMessage() {
     }
 
     // ── v5.5: URL okuma — web aramasından bağımsız, her zaman otomatik ──────
+    // Mesajda URL varsa, URL fetch açıksa ve görsel mesaj değilse çek
     val urlsInMessage = extractUrlsFromMessage(msgText, limit = 3)
     if (urlsInMessage.isNotEmpty() && imgPath == null) {
         lifecycleScope.launch {
@@ -140,6 +141,7 @@ internal fun MainActivity.sendMessage() {
             supportActionBar?.title = savedTitle
 
             if (pageContent.isNotEmpty()) {
+                // URL içeriğini annotatedContent'e ekle; web araması da varsa üstüne bindirme yapılır
                 val annotated = buildString {
                     appendLine("Aşağıda kullanıcının paylaştığı URL(ler)den çekilen sayfa içerikleri yer almaktadır.")
                     appendLine("Bu içeriği kullanarak kullanıcının isteğini yerine getir.")
@@ -156,6 +158,8 @@ internal fun MainActivity.sendMessage() {
                     currentMessages[lastIdx] = updated
                 }
                 MainActivity.log("URLFetch", "URL içeriği annotatedContent'e yazıldı: ${pageContent.length} karakter")
+
+                // URL fetch bitti, şimdi web araması da varsa üzerine ekle; yoksa direkt gönder
                 continueWithWebSearch(msgText, imgPath, currentMessages.toList())
             } else {
                 MainActivity.log("URLFetch", "URL fetch sonuç vermedi, normal akışa devam ediliyor")
@@ -165,17 +169,20 @@ internal fun MainActivity.sendMessage() {
         return
     }
 
+    // URL yoksa doğrudan web araması akışına geç
     continueWithWebSearch(msgText, imgPath, currentMessages.toList())
 }
 
 /**
  * URL fetch sonrasında (veya URL yoksa doğrudan) web araması akışını yürütür.
+ * Web araması kapalıysa veya tetiklenmiyorsa sendMessageContent'i çağırır.
  */
 private fun MainActivity.continueWithWebSearch(
     msgText: String,
     imgPath: String?,
     messagesSnapshot: List<ChatMessage>
 ) {
+    // v5.4: Akıllı web araması — mod ve tetikleyici mantığı
     if (webSearchMode != "off" && msgText.isNotEmpty() && imgPath == null) {
         val shouldSearch = when (webSearchMode) {
             "trigger" -> containsTrigger(msgText)
@@ -213,6 +220,7 @@ private fun MainActivity.continueWithWebSearch(
 
                     val today = java.text.SimpleDateFormat("d MMMM yyyy, EEEE", java.util.Locale("tr")).format(java.util.Date())
 
+                    // Web arama sonuçlarını mevcut annotatedContent'in üzerine ekle
                     val modified = currentMessages.toMutableList()
                     val lastIdx = modified.indexOfLast { it.isUser }
                     if (lastIdx >= 0) {
@@ -230,6 +238,7 @@ private fun MainActivity.continueWithWebSearch(
                             appendLine()
                             appendLine("=== ARAMA SONUÇLARI SONU ===")
                             appendLine()
+                            // Eğer URL içeriği zaten varsa, onu da koru
                             if (existingAnnotated.isNotBlank()) {
                                 appendLine()
                                 appendLine(existingAnnotated)
@@ -410,7 +419,6 @@ internal fun MainActivity.buildFormattedPrompt(messages: List<ChatMessage>): Str
             sb.append("<|im_start|>assistant\n$charName: ")
         }
         3 -> {
-            // Gemma 3 — <start_of_turn> / <end_of_turn>
             var systemInjected = false
             for (msg in messages) {
                 if (msg.isUser) {
@@ -465,34 +473,6 @@ internal fun MainActivity.buildFormattedPrompt(messages: List<ChatMessage>): Str
                 sb.append("${t.lastOutputPrefix}$charName: ")
             }
         }
-        7 -> {
-            // Gemma 4 — <|turn>role\n ... <turn|>\n
-            // System turn: sistem promptu + think token (noThinking=false ise)
-            val hasSystem = sp.isNotEmpty()
-            val useThink  = !noThinking
-            if (hasSystem || useThink) {
-                sb.append("<|turn>system\n")
-                if (useThink) sb.append("<|think|>")
-                if (hasSystem) sb.append(sp)
-                sb.append("<turn|>\n")
-            }
-            for (msg in messages) {
-                if (msg.isUser) {
-                    val body = applyPersona(modelContent(msg))
-                    sb.append("<|turn>user\n$userName: $body<turn|>\n")
-                } else {
-                    // Geçmiş model yanıtları: <|channel> bloğunu temizle, düz metin yaz
-                    val clean = msg.content
-                        .replace(Regex("<\\|channel>.*?<channel\\|>", RegexOption.DOT_MATCHES_ALL), "")
-                        .trim()
-                    sb.append("<|turn>model\n${clean}<turn|>\n")
-                }
-            }
-            sb.insert(0, "<bos>")
-            // Generation prompt — think etkinse <|think|> ile başlasın
-            sb.append("<|turn>model\n$charName: ")
-            if (useThink) sb.append("<|channel>")
-        }
     }
     return sb.toString()
 }
@@ -510,19 +490,6 @@ internal fun MainActivity.buildVisionPrompt(userContent: String): String {
                      val bos = t.bosToken
                      "$bos${t.inputPrefix}$userName: $body${t.inputSuffix}${t.lastOutputPrefix}$charName: "
                  } ?: body
-        7    -> {
-            // Gemma 4 vision: tek user turn, ardından model turn
-            val useThink = !noThinking
-            buildString {
-                append("<bos>")
-                if (useThink) {
-                    append("<|turn>system\n<|think|><turn|>\n")
-                }
-                append("<|turn>user\n$userName: $body<turn|>\n")
-                append("<|turn>model\n$charName: ")
-                if (useThink) append("<|channel>")
-            }
-        }
         else -> body
     }
 }
@@ -601,12 +568,6 @@ internal fun MainActivity.sendMessageContent(messages: List<ChatMessage>) {
                     .replace("<|end_of_text|>", "")
                     .replace("<|start_of_role|>", "")
                     .replace("<|end_of_role|>", "")
-                    // Gemma 4 stop tokenları
-                    .replace("<turn|>", "")
-                    .replace("<|turn>", "")
-                    // Gemma 4 think channel tokenları — channel içeriği düz metin olarak göster
-                    .replace("<|channel>", "")
-                    .replace("<channel|>", "")
                     .let { t ->
                         if (selectedTemplate == 6) {
                             val stop = activeCustomTemplate()?.stopSeq ?: ""
@@ -699,7 +660,6 @@ internal fun MainActivity.buildTitlePrompt(userText: String): String {
         6    -> activeCustomTemplate()?.let { t ->
                      "${t.bosToken}${t.inputPrefix}$instruction${t.inputSuffix}${t.lastOutputPrefix}"
                  } ?: instruction
-        7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
         else -> instruction
     }
 }
@@ -714,8 +674,6 @@ internal fun MainActivity.generateConversationTitle(convId: String, userText: St
             val rawTitle = sb.toString()
                 .replace(Regex("<[^>]+>"), "").replace("|im_end|", "").replace("|eot_id|", "")
                 .replace("<end_of_turn>", "").replace("<|eot_id|>", "")
-                .replace("<turn|>", "").replace("<|turn>", "")
-                .replace("<|channel>", "").replace("<channel|>", "")
                 .trim().lines().firstOrNull { it.isNotBlank() }?.trim() ?: ""
 
             val cleanTitle = rawTitle
