@@ -253,13 +253,13 @@ private fun MainActivity.continueWithWebSearch(
                         modified[lastIdx] = updated
                         currentMessages[lastIdx] = updated
                     }
-                    MainActivity.log("Maya", "Web arama tamamlandı: ${searchResults.length} karakter, modele iletildi")
-                    modified.toList()
-                } else {
-                    MainActivity.log("Maya", "Web arama sonuç döndürmedi (motor: $webSearchEngine, sorgu: \"$searchQuery\")")
-                    currentMessages.toList()
-                }
-                sendMessageContent(messagesToSend)
+                        MainActivity.log("Maya", "Web arama tamamlandı: ${searchResults.length} karakter, modele iletildi")
+                        messagesToSend = modified.toList()
+                    } else {
+                        MainActivity.log("Maya", "Web arama sonuç döndürmedi (motor: $$webSearchEngine, sorgu: \"$$searchQuery\")")
+                        messagesToSend = currentMessages.toList()
+                    }
+                    sendMessageContent(messagesToSend)
             }
         } else {
             sendMessageContent(currentMessages.toList())
