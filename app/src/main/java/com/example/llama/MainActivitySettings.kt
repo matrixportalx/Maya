@@ -258,19 +258,19 @@ internal fun MainActivity.showSettingsDialog() {
     layout.addView(topKBar)
 
     // ── Qwen3 ─────────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Qwen3 Ayarı"))
+    layout.addView(sectionTitle("Qwen3 / Gemma 4 Düşünme Ayarı"))
     val noThinkingRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
     }
     val noThinkingLabel = TextView(ctx).apply {
-        text = "💭 Düşünme modunu kapat (/no_think)"; textSize = 13f
+        text = "💭 Düşünme modunu kapat"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val noThinkingSwitch = Switch(ctx).apply { isChecked = noThinking }
     noThinkingRow.addView(noThinkingLabel); noThinkingRow.addView(noThinkingSwitch); layout.addView(noThinkingRow)
     layout.addView(TextView(ctx).apply {
-        text = "Gereksiz <think> bloklarını önler. Sadece Qwen3 için."; textSize = 11f; alpha = 0.6f
+        text = "Qwen3 için /no_think, Gemma 4 için <|think|> tokenını kapatır. Gereksiz düşünme bloklarını önler."; textSize = 11f; alpha = 0.6f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
     })
 
@@ -677,6 +677,7 @@ internal fun MainActivity.showSettingsDialog() {
         setTypeface(null, android.graphics.Typeface.BOLD)
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
     })
+    // Tüm şablon isimleri — index 0..7 + "Model varsayılanı" başa ekleniyor
     val templateNames = DailyReportWorker.TEMPLATE_NAMES
     val templateDisplayNames = arrayOf("Model varsayılanı (önerilen)") + templateNames
     var currentTemplateSelection = if (reportModelTemplate < 0) 0 else reportModelTemplate + 1
@@ -695,7 +696,7 @@ internal fun MainActivity.showSettingsDialog() {
     layout.addView(TextView(ctx).apply {
         text = "Rapor özetlemesi için kullanılacak konuşma şablonu. " +
                "\"Model varsayılanı\" seçiliyse GGUF metadata'sındaki şablon kullanılır. " +
-               "Qwen3/Qwen3.5 için ChatML, Gemma için Gemma seçin."; textSize = 11f; alpha = 0.6f
+               "Qwen3/Qwen3.5 için ChatML, Gemma 3 için Gemma 3, Gemma 4 için Gemma 4 seçin."; textSize = 11f; alpha = 0.6f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
     })
 
@@ -704,15 +705,15 @@ internal fun MainActivity.showSettingsDialog() {
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
     }
     val reportNoThinkLabel = TextView(ctx).apply {
-        text = "💭 /no_think — Qwen3 düşünmesini kapat"; textSize = 13f
+        text = "💭 Düşünmeyi kapat (Qwen3 / Gemma 4)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val reportNoThinkSwitch = Switch(ctx).apply { isChecked = reportModelNoThink }
     reportNoThinkRow.addView(reportNoThinkLabel); reportNoThinkRow.addView(reportNoThinkSwitch)
     layout.addView(reportNoThinkRow)
     layout.addView(TextView(ctx).apply {
-        text = "Qwen3/Qwen3.5 modellerinde <think> bloğunu önler ve token tasarrufu sağlar. " +
-               "Diğer modelleri etkilemez."; textSize = 11f; alpha = 0.6f
+        text = "Qwen3'te <think> bloğunu, Gemma 4'te <|think|> tokenını devre dışı bırakır. " +
+               "Token tasarrufu sağlar. Diğer modelleri etkilemez."; textSize = 11f; alpha = 0.6f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
     })
 
@@ -947,7 +948,7 @@ internal fun MainActivity.showSettingsDialog() {
         flashAttnMode     = when {
             rbFlashOff.isChecked -> 0
             rbFlashOn.isChecked  -> 2
-            else                 -> 1  // rbFlashAuto veya bilinmeyen → Otomatik
+            else                 -> 1
         }
         useMmap           = mmapSwitch.isChecked
         useMlock          = mlockSwitch.isChecked
@@ -970,7 +971,6 @@ internal fun MainActivity.showSettingsDialog() {
         searxngUrl           = searxngUrlEdit.text.toString().trim().ifEmpty { "https://searx.be" }
         webSearchResultCount = resultCountBar.progress + 1
         webPageFetchEnabled  = fetchSwitch.isChecked
-        // v5.5: URL okuma
         urlFetchEnabled      = urlFetchSwitch.isChecked
         urlFetchCharLimit    = urlCharLimitEdit.text.toString().toIntOrNull()
             ?.coerceIn(500, 50000) ?: 5000
