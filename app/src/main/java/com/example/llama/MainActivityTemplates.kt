@@ -64,15 +64,17 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
         "0 · Otomatik (GGUF'tan)",
         "1 · Aya / Command-R",
         "2 · ChatML  —  Qwen, LFM, Phi-3, Hermes, Yi…",
-        "3 · Gemma  —  Gemma 2/3, PaliGemma…",
+        "3 · Gemma 3  —  Gemma 2/3, PaliGemma…",
         "4 · Llama 3  —  Llama-3.x, Ministral…",
-        "5 · Granite  —  IBM Granite 3.x / 4.x…"
+        "5 · Granite  —  IBM Granite 3.x / 4.x…",
+        "6 · (Özel Şablon)",
+        "7 · Gemma 4  —  Gemma 4B E4B, think destekli…"
     )
     val prefs    = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     val modelKey = "template_${MainActivity.entryDisplayName(entry)}"
     val saved    = prefs.getInt(modelKey, 0)
 
-    val savedCustomId = if (saved >= 6)
+    val savedCustomId = if (saved == 6)
         prefs.getString("${modelKey}_custom_id", null) else null
 
     fun rebuildAndShow() {
@@ -81,11 +83,15 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
         allItems.add("➕  Yeni şablon ekle…")
         allItems.add("⚙️  Şablonları yönet…")
 
+        // Built-in sayısı: 0-7 arası (0..7 = 8 item, index 0..7)
+        val builtInCount = builtIns.size  // 8
+
         val currentSel = when {
             saved in 0..5 -> saved
-            savedCustomId != null -> {
+            saved == 7    -> 7
+            saved == 6 && savedCustomId != null -> {
                 val idx = customTemplates.indexOfFirst { it.id == savedCustomId }
-                if (idx >= 0) 6 + idx else 0
+                if (idx >= 0) builtInCount + idx else 0
             }
             else -> 0
         }
@@ -93,6 +99,7 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
         android.app.AlertDialog.Builder(this).setTitle("⚙️ Sohbet Şablonu")
             .setSingleChoiceItems(allItems.toTypedArray(), currentSel) { dialog, which ->
                 when {
+                    // Built-in şablonlar: 0-5 ve 7 (6 = eski özel şablon placeholder)
                     which in 0..5 -> {
                         selectedTemplate = which
                         selectedCustomTemplateId = null
@@ -101,8 +108,18 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
                         dialog.dismiss()
                         loadModel(entry)
                     }
-                    which < 6 + customTemplates.size -> {
-                        val tpl = customTemplates[which - 6]
+                    which == 7 -> {
+                        // Gemma 4
+                        selectedTemplate = 7
+                        selectedCustomTemplateId = null
+                        prefs.edit().putInt(modelKey, 7)
+                            .remove("${modelKey}_custom_id").apply()
+                        dialog.dismiss()
+                        loadModel(entry)
+                    }
+                    which < builtInCount + customTemplates.size -> {
+                        // Özel şablonlar: index builtInCount .. builtInCount+custom.size-1
+                        val tpl = customTemplates[which - builtInCount]
                         selectedTemplate = 6
                         selectedCustomTemplateId = tpl.id
                         prefs.edit().putInt(modelKey, 6)
@@ -111,7 +128,8 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
                         dialog.dismiss()
                         loadModel(entry)
                     }
-                    which == 6 + customTemplates.size -> {
+                    which == builtInCount + customTemplates.size -> {
+                        // "Yeni şablon ekle"
                         dialog.dismiss()
                         showTemplateEditDialog(null, onSaved = { newTpl ->
                             selectedTemplate = 6
@@ -123,6 +141,7 @@ internal fun MainActivity.showTemplatePickerDialog(entry: String) {
                         })
                     }
                     else -> {
+                        // "Şablonları yönet"
                         dialog.dismiss()
                         showTemplateManagerDialog(entry)
                     }
@@ -258,11 +277,16 @@ internal fun MainActivity.showTemplateEditDialog(
             "<|start_header_id|>user<|end_header_id|>\n\n",   "<|eot_id|>",
             "<|start_header_id|>assistant<|end_header_id|>\n\n", "<|eot_id|>",
             "<|start_header_id|>assistant<|end_header_id|>\n\n", "<|eot_id|>"),
-        TplPreset("Gemma",    "<bos>",
+        TplPreset("Gemma 3",  "<bos>",
             "", "",
             "<start_of_turn>user\n", "<end_of_turn>\n",
             "<start_of_turn>model\n", "<end_of_turn>\n",
             "<start_of_turn>model\n", "<end_of_turn>"),
+        TplPreset("Gemma 4",  "<bos>",
+            "<|turn>system\n<|think|>", "<turn|>\n",
+            "<|turn>user\n",            "<turn|>\n",
+            "<|turn>model\n",           "<turn|>\n",
+            "<|turn>model\n",           "<turn|>"),
         TplPreset("Aya / C-R", "<BOS_TOKEN>",
             "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>", "<|END_OF_TURN_TOKEN|>",
             "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>",   "<|END_OF_TURN_TOKEN|>",
