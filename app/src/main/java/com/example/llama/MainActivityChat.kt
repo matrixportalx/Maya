@@ -745,8 +745,8 @@ internal fun MainActivity.buildTitlePrompt(userText: String): String {
         6    -> activeCustomTemplate()?.let { t ->
                      "${t.bosToken}${t.inputPrefix}$instruction${t.inputSuffix}${t.lastOutputPrefix}"
                  } ?: instruction
-        // Gemma 4: başlık üretiminde thinking KAPALI (noThink=true gibi davran)
-        // <|think|> eklenmez, <|channel> eklenmez → doğrudan başlık üretilir
+        // Gemma 4: başlık üretiminde thinking TAMAMEN KAPALI
+        // System turn yok, <|think|> yok, <|channel> yok → doğrudan başlık üretilir
         7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
         else -> instruction
     }
@@ -757,27 +757,32 @@ internal fun MainActivity.generateConversationTitle(convId: String, userText: St
         try {
             val prompt = buildTitlePrompt(userText)
             val sb = StringBuilder()
-            engine.sendUserPrompt(prompt, predictLength = 30).collect { token -> sb.append(token) }
+            engine.sendUserPrompt(prompt, predictLength = 40).collect { token -> sb.append(token) }
 
-            val rawTitle = sb.toString()
-                // Tüm format tokenlarını temizle
-                .replace(Regex("<[^>]+>"), "")
-                .replace("|im_end|", "")
-                .replace("|eot_id|", "")
-                .replace("<end_of_turn>", "")
-                .replace("<|eot_id|>", "")
-                .replace("<turn|>", "")
-                .replace("<|turn>", "")
-                // Gemma 4 thinking tokenları — başlık üretiminde thinking kapalı ama
-                // model yine de channel bloğu açabilir; temizle
-                .replace("<|channel>", "")
-                .replace("<channel|>", "")
-                // "thought\n" prefix'i varsa temizle
-                .replace(Regex("^thought\\n", RegexOption.MULTILINE), "")
-                // Tüm satırları al, boş olmayanı seç
+            val raw = sb.toString()
+
+            // Gemma 4: model yine de thinking yaptıysa <channel|> sonrasını al
+            val afterChannel = if (raw.contains("<channel|>")) {
+                raw.substringAfterLast("<channel|>").trim()
+            } else raw
+
+            // thought / thinking ile başlayan satırları at
+            val withoutThought = afterChannel
+                .lines()
+                .dropWhile { line ->
+                    val l = line.trim().lowercase()
+                    l.isEmpty() || l == "thought" ||
+                    l.startsWith("thought") || l.startsWith("thinking") ||
+                    l.startsWith("here\'s a thinking") || l.startsWith("here is a thinking")
+                }
+                .joinToString("\n")
+
+            val rawTitle = withoutThought
+                .replace(Regex("<[^>]{1,30}>"), "")
+                .replace("|im_end|", "").replace("|eot_id|", "")
                 .trim()
                 .lines()
-                .firstOrNull { it.isNotBlank() }
+                .firstOrNull { it.trim().length >= 2 }
                 ?.trim() ?: ""
 
             val cleanTitle = rawTitle
