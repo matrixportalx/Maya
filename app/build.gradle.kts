@@ -65,6 +65,7 @@ dependencies {
 
     // Markdown render
     implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
 
     // WorkManager — günlük rapor arka plan işi
     implementation("androidx.work:work-runtime-ktx:2.9.0")
