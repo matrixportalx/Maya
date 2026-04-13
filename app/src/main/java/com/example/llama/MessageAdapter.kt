@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.MarkwonTheme
+import io.noties.markwon.ext.tables.TablePlugin
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -249,6 +250,7 @@ class MessageAdapter(
         )
         return Markwon.builder(context)
             .usePlugin(io.noties.markwon.core.CorePlugin.create())
+            .usePlugin(io.noties.markwon.ext.tables.TablePlugin.create(context))
             .usePlugin(object : io.noties.markwon.AbstractMarkwonPlugin() {
                 override fun configureTheme(builder: MarkwonTheme.Builder) {
                     builder.linkColor(linkColor)
