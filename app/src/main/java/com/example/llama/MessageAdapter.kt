@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.MarkwonTheme
+import io.noties.markwon.ext.tables.TablePlugin
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -107,20 +108,101 @@ class MessageAdapter(
         val visibleContent: String
     )
 
+    /**
+     * Tüm thinking formatlarını destekler:
+     *
+     * Gemma 4 (tam, <|channel> ile başlayan):
+     *   <|channel>thought\n[düşünce]<channel|>[yanıt]
+     *
+     * Gemma 4 (tam, doğrudan thought\n ile başlayan — model <|channel> atladığında):
+     *   thought\n[düşünce]<channel|>[yanıt]
+     *
+     * Gemma 4 (akış sırasında, henüz <channel|> gelmemiş):
+     *   thought\n[düşünce devam ediyor...]
+     *   <|channel>thought\n[düşünce devam ediyor...]
+     *
+     * Qwen3 / Gemma 3 (tam):
+     *   <think>[düşünce]</think>[yanıt]
+     *
+     * Qwen3 / Gemma 3 (akış sırasında):
+     *   <think>[düşünce devam ediyor...]
+     */
     private fun parseThinking(raw: String): ParsedMessage {
-        val completeRegex = Regex("""<think>(.*?)</think>""", RegexOption.DOT_MATCHES_ALL)
-        val completeMatch = completeRegex.find(raw)
-        if (completeMatch != null) {
-            val thinkContent = completeMatch.groupValues[1].trim()
-            val visible = raw.removeRange(completeMatch.range).trim()
-            return ParsedMessage(thinkContent, visible)
+
+        // ── 1. Gemma 4: <|channel>thought\n...<channel|> (tam blok) ──────────
+        val g4WithMarkerRegex = Regex(
+            """<\|channel>thought\n(.*?)<channel\|>""",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        )
+        g4WithMarkerRegex.find(raw)?.let { m ->
+            val think = m.groupValues[1].trim()
+            val visible = raw.removeRange(m.range).trim()
+            return ParsedMessage(think.ifEmpty { null }, visible)
         }
-        val openIdx = raw.indexOf("<think>")
-        if (openIdx != -1) {
-            val thinkContent = raw.substring(openIdx + 7).trim()
-            val visible = raw.substring(0, openIdx).trim()
-            return ParsedMessage("$thinkContent▌", visible)
+
+        // ── 2. Gemma 4: thought\n...<channel|> (model <|channel> atladı) ─────
+        val g4NoMarkerRegex = Regex(
+            """^thought\n(.*?)<channel\|>""",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        )
+        g4NoMarkerRegex.find(raw)?.let { m ->
+            val think = m.groupValues[1].trim()
+            val visible = raw.removeRange(m.range).trim()
+            return ParsedMessage(think.ifEmpty { null }, visible)
         }
+
+        // ── 3. Gemma 4: <|channel>(thought\n)...<channel|> (genel) ──────────
+        val g4GenericRegex = Regex(
+            """<\|channel>(.*?)<channel\|>""",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+        )
+        g4GenericRegex.find(raw)?.let { m ->
+            val think = m.groupValues[1].removePrefix("thought\n").trim()
+            val visible = raw.removeRange(m.range).trim()
+            return ParsedMessage(think.ifEmpty { null }, visible)
+        }
+
+        // ── 4. Gemma 4 akış: <|channel>thought\n... (henüz kapanmadı) ────────
+        val g4OpenWithMarkerIdx = raw.indexOf("<|channel>thought\n")
+        if (g4OpenWithMarkerIdx != -1) {
+            val after = g4OpenWithMarkerIdx + "<|channel>thought\n".length
+            val think = raw.substring(after).trim()
+            val visible = raw.substring(0, g4OpenWithMarkerIdx).trim()
+            return ParsedMessage("$think▌", visible)
+        }
+
+        // ── 5. Gemma 4 akış: thought\n... (henüz kapanmadı, marker yok) ──────
+        if (raw.startsWith("thought\n")) {
+            val think = raw.removePrefix("thought\n").trim()
+            return ParsedMessage("$think▌", "")
+        }
+
+        // ── 6. Gemma 4 akış: <|channel>... (henüz kapanmadı) ─────────────────
+        val g4OpenIdx = raw.indexOf("<|channel>")
+        if (g4OpenIdx != -1) {
+            val after = g4OpenIdx + "<|channel>".length
+            val think = raw.substring(after).removePrefix("thought\n").trim()
+            val visible = raw.substring(0, g4OpenIdx).trim()
+            return ParsedMessage("$think▌", visible)
+        }
+
+        // ── 7. Qwen3 / Gemma 3: <think>...</think> (tam blok) ────────────────
+        val thinkCompleteRegex = Regex("""<think>(.*?)</think>""", RegexOption.DOT_MATCHES_ALL)
+        thinkCompleteRegex.find(raw)?.let { m ->
+            val think = m.groupValues[1].trim()
+            val visible = raw.removeRange(m.range).trim()
+            return ParsedMessage(think.ifEmpty { null }, visible)
+        }
+
+        // ── 8. Qwen3 / Gemma 3 akış: <think>... (henüz kapanmadı) ────────────
+        val thinkOpenIdx = raw.indexOf("<think>")
+        if (thinkOpenIdx != -1) {
+            val think = raw.substring(thinkOpenIdx + 7).trim()
+            val visible = raw.substring(0, thinkOpenIdx).trim()
+            return ParsedMessage("$think▌", visible)
+        }
+
+        // ── 9. Thinking bloğu yok ─────────────────────────────────────────────
         return ParsedMessage(null, raw)
     }
 
@@ -168,6 +250,7 @@ class MessageAdapter(
         )
         return Markwon.builder(context)
             .usePlugin(io.noties.markwon.core.CorePlugin.create())
+            .usePlugin(io.noties.markwon.ext.tables.TablePlugin.create(context))
             .usePlugin(object : io.noties.markwon.AbstractMarkwonPlugin() {
                 override fun configureTheme(builder: MarkwonTheme.Builder) {
                     builder.linkColor(linkColor)

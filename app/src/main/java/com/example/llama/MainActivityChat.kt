@@ -489,7 +489,7 @@ internal fun MainActivity.buildFormattedPrompt(messages: List<ChatMessage>): Str
                 }
             }
             sb.insert(0, "<bos>")
-            // Generation prompt — think etkinse <|think|> ile başlasın
+            // Generation prompt — think etkinse <|channel> ile başlasın
             sb.append("<|turn>model\n$charName: ")
             if (useThink) sb.append("<|channel>")
         }
@@ -525,6 +525,74 @@ internal fun MainActivity.buildVisionPrompt(userContent: String): String {
         }
         else -> body
     }
+}
+
+// ── Token temizleme yardımcısı ────────────────────────────────────────────────
+
+/**
+ * Üretilen token'ı UI'a göstermek için temizler.
+ * Gemma 4 thinking tokenları (<|channel> ve <channel|>) KORUNUR —
+ * bunlar MessageAdapter.parseThinking tarafından işlenir.
+ * Diğer şablon stop tokenları temizlenir.
+ */
+private fun MainActivity.cleanToken(token: String): String {
+    return token
+        .replace("<|END_OF_TURN_TOKEN|>", "")
+        .replace("<|START_OF_TURN_TOKEN|>", "")
+        .replace("<|USER_TOKEN|>", "")
+        .replace("<|CHATBOT_TOKEN|>", "")
+        .replace("<|START_RESPONSE|>", "")
+        .replace("<|END_RESPONSE|>", "")
+        .replace("<end_of_turn>", "")
+        .replace("<start_of_turn>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<|im_end|>", "")
+        .replace("<|end_of_text|>", "")
+        .replace("<|start_of_role|>", "")
+        .replace("<|end_of_role|>", "")
+        // Gemma 4 turn tokenları (navigation markers)
+        .replace("<turn|>", "")
+        .replace("<|turn>", "")
+        // NOT: <|channel> ve <channel|> KASITLI OLARAK burada temizlenmez.
+        // MessageAdapter.parseThinking bu tokenları kullanarak thinking bloğunu
+        // UI'da ayrı bölüm olarak gösterir.
+        .let { t ->
+            if (selectedTemplate == 6) {
+                val stop = activeCustomTemplate()?.stopSeq ?: ""
+                if (stop.isNotEmpty()) t.replace(stop, "") else t
+            } else t
+        }
+}
+
+/**
+ * DB'ye kaydedilecek tam yanıttan tüm format tokenlarını temizler.
+ * Thinking blokları korunur (parseThinking DB'den okurken de çalışır).
+ */
+private fun MainActivity.cleanFullResponse(raw: String): String {
+    return raw
+        .replace("<|END_OF_TURN_TOKEN|>", "")
+        .replace("<|START_OF_TURN_TOKEN|>", "")
+        .replace("<|USER_TOKEN|>", "")
+        .replace("<|CHATBOT_TOKEN|>", "")
+        .replace("<|START_RESPONSE|>", "")
+        .replace("<|END_RESPONSE|>", "")
+        .replace("<end_of_turn>", "")
+        .replace("<start_of_turn>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<|im_end|>", "")
+        .replace("<|end_of_text|>", "")
+        .replace("<|start_of_role|>", "")
+        .replace("<|end_of_role|>", "")
+        .replace("<turn|>", "")
+        .replace("<|turn>", "")
+        // <|channel> ve <channel|> DB'de KORUNUR — parseThinking okur
+        .let { t ->
+            if (selectedTemplate == 6) {
+                val stop = activeCustomTemplate()?.stopSeq ?: ""
+                if (stop.isNotEmpty()) t.replace(stop, "") else t
+            } else t
+        }
+        .trim()
 }
 
 // ── Üretim döngüsü ────────────────────────────────────────────────────────────
@@ -587,32 +655,9 @@ internal fun MainActivity.sendMessageContent(messages: List<ChatMessage>) {
             }
 
             tokenFlow.collect { token ->
-                val cleaned = token
-                    .replace("<|END_OF_TURN_TOKEN|>", "")
-                    .replace("<|START_OF_TURN_TOKEN|>", "")
-                    .replace("<|USER_TOKEN|>", "")
-                    .replace("<|CHATBOT_TOKEN|>", "")
-                    .replace("<|START_RESPONSE|>", "")
-                    .replace("<|END_RESPONSE|>", "")
-                    .replace("<end_of_turn>", "")
-                    .replace("<start_of_turn>", "")
-                    .replace("<|eot_id|>", "")
-                    .replace("<|im_end|>", "")
-                    .replace("<|end_of_text|>", "")
-                    .replace("<|start_of_role|>", "")
-                    .replace("<|end_of_role|>", "")
-                    // Gemma 4 stop tokenları
-                    .replace("<turn|>", "")
-                    .replace("<|turn>", "")
-                    // Gemma 4 think channel tokenları — channel içeriği düz metin olarak göster
-                    .replace("<|channel>", "")
-                    .replace("<channel|>", "")
-                    .let { t ->
-                        if (selectedTemplate == 6) {
-                            val stop = activeCustomTemplate()?.stopSeq ?: ""
-                            if (stop.isNotEmpty()) t.replace(stop, "") else t
-                        } else t
-                    }
+                // cleanToken: Gemma 4 thinking tokenları (<|channel>/<channel|>) KORUNUR
+                val cleaned = cleanToken(token)
+
                 if (tokenCount == 0) generationStartTime = System.currentTimeMillis()
                 responseBuilder.append(cleaned)
                 tokenCount++; tokenUpdateCounter++
@@ -644,7 +689,8 @@ internal fun MainActivity.sendMessageContent(messages: List<ChatMessage>) {
                 if (current.isEmpty()) "[Hata: ${e.message}]" else current
             )
         } finally {
-            val fullResponse = stripCharPrefix(responseBuilder.toString())
+            // cleanFullResponse: Gemma 4 thinking tokenları korunur, sadece format tokenlari temizlenir
+            val fullResponse = stripCharPrefix(cleanFullResponse(responseBuilder.toString()))
             val elapsedSec = (System.currentTimeMillis() - generationStartTime) / 1000f
             val tps = if (elapsedSec > 0f && tokenCount > 0) tokenCount / elapsedSec else null
 
@@ -699,6 +745,8 @@ internal fun MainActivity.buildTitlePrompt(userText: String): String {
         6    -> activeCustomTemplate()?.let { t ->
                      "${t.bosToken}${t.inputPrefix}$instruction${t.inputSuffix}${t.lastOutputPrefix}"
                  } ?: instruction
+        // Gemma 4: başlık üretiminde thinking TAMAMEN KAPALI
+        // System turn yok, <|think|> yok, <|channel> yok → doğrudan başlık üretilir
         7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
         else -> instruction
     }
@@ -709,14 +757,33 @@ internal fun MainActivity.generateConversationTitle(convId: String, userText: St
         try {
             val prompt = buildTitlePrompt(userText)
             val sb = StringBuilder()
-            engine.sendUserPrompt(prompt, predictLength = 30).collect { token -> sb.append(token) }
+            engine.sendUserPrompt(prompt, predictLength = 40).collect { token -> sb.append(token) }
 
-            val rawTitle = sb.toString()
-                .replace(Regex("<[^>]+>"), "").replace("|im_end|", "").replace("|eot_id|", "")
-                .replace("<end_of_turn>", "").replace("<|eot_id|>", "")
-                .replace("<turn|>", "").replace("<|turn>", "")
-                .replace("<|channel>", "").replace("<channel|>", "")
-                .trim().lines().firstOrNull { it.isNotBlank() }?.trim() ?: ""
+            val raw = sb.toString()
+
+            // Gemma 4: model yine de thinking yaptıysa <channel|> sonrasını al
+            val afterChannel = if (raw.contains("<channel|>")) {
+                raw.substringAfterLast("<channel|>").trim()
+            } else raw
+
+            // thought / thinking ile başlayan satırları at
+            val withoutThought = afterChannel
+                .lines()
+                .dropWhile { line ->
+                    val l = line.trim().lowercase()
+                    l.isEmpty() || l == "thought" ||
+                    l.startsWith("thought") || l.startsWith("thinking") ||
+                    l.startsWith("here\'s a thinking") || l.startsWith("here is a thinking")
+                }
+                .joinToString("\n")
+
+            val rawTitle = withoutThought
+                .replace(Regex("<[^>]{1,30}>"), "")
+                .replace("|im_end|", "").replace("|eot_id|", "")
+                .trim()
+                .lines()
+                .firstOrNull { it.trim().length >= 2 }
+                ?.trim() ?: ""
 
             val cleanTitle = rawTitle
                 .removePrefix("\"").removeSuffix("\"")

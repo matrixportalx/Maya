@@ -12,8 +12,8 @@ android {
         applicationId = "tr.maya"
         minSdk = 33
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.0.6"
+        versionCode = 9
+        versionName = "1.0.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -65,6 +65,7 @@ dependencies {
 
     // Markdown render
     implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
 
     // WorkManager — günlük rapor arka plan işi
     implementation("androidx.work:work-runtime-ktx:2.9.0")
