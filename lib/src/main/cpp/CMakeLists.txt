@@ -61,7 +61,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}/include
         ${LLAMA_SRC}/ggml/include
         ${LLAMA_SRC}/ggml/src
-        ${MTMD_DIR})
+        ${MTMD_DIR}
+        ${LLAMA_SRC}/vendor/json/include)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
