@@ -54,7 +54,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 )
 
 # vendor/nlohmann/ icinde json_fwd.hpp dogrudan bulunuyor.
-# #include <nlohmann/json_fwd.hpp> icin vendor/ dizinini include path'e ekliyoruz.
+# #include <nlohmann/json_fwd.hpp> icin vendor/ dizinini ekliyoruz.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}
         ${LLAMA_SRC}/common
@@ -64,8 +64,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${MTMD_DIR}
         ${LLAMA_SRC}/vendor)
 
+# Bu llama.cpp surumunde common kutuphanesi "llama-common" olarak adlandirildi.
 target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
-        common
+        llama-common
         android
         log)
