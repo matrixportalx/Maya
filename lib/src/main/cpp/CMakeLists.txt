@@ -34,30 +34,6 @@ set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../llama.cpp)
 add_subdirectory(${LLAMA_SRC} build-llama)
 
 # --------------------------------------------------------------------------
-# nlohmann/json include path — llama.cpp'nin yeni surumunde common/peg-parser.h
-# nlohmann/json_fwd.hpp'yi dogrudan include ediyor. Birden fazla olasiligi dener.
-# --------------------------------------------------------------------------
-set(NLOHMANN_JSON_INCLUDE "")
-
-foreach(_candidate
-        "${LLAMA_SRC}/vendor/json/include"
-        "${LLAMA_SRC}/vendor/nlohmann"
-        "${LLAMA_SRC}/common/vendor/json/include"
-        "${CMAKE_BINARY_DIR}/build-llama/_deps/json-src/include"
-        "${CMAKE_BINARY_DIR}/build-llama/_deps/nlohmann_json-src/include")
-    if(EXISTS "${_candidate}/nlohmann/json_fwd.hpp")
-        set(NLOHMANN_JSON_INCLUDE "${_candidate}")
-        message(STATUS "nlohmann/json found at: ${_candidate}")
-        break()
-    endif()
-endforeach()
-
-if(NLOHMANN_JSON_INCLUDE STREQUAL "")
-    message(WARNING "nlohmann/json_fwd.hpp not found, using fallback path.")
-    set(NLOHMANN_JSON_INCLUDE "${LLAMA_SRC}/vendor/json/include")
-endif()
-
-# --------------------------------------------------------------------------
 # v4.8 Multimodal: libmtmd (tools/mtmd/ + alt klasorler)
 # --------------------------------------------------------------------------
 set(MTMD_DIR ${LLAMA_SRC}/tools/mtmd)
@@ -77,6 +53,8 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
         GGML_OPENMP=$<BOOL:${GGML_OPENMP}>
 )
 
+# vendor/nlohmann/ icinde json_fwd.hpp dogrudan bulunuyor.
+# #include <nlohmann/json_fwd.hpp> icin vendor/ dizinini include path'e ekliyoruz.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}
         ${LLAMA_SRC}/common
@@ -84,7 +62,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}/ggml/include
         ${LLAMA_SRC}/ggml/src
         ${MTMD_DIR}
-        ${NLOHMANN_JSON_INCLUDE})
+        ${LLAMA_SRC}/vendor)
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
