@@ -1,6 +1,7 @@
 package tr.maya
 
 import android.content.Context
+import android.graphics.drawable.GradientDrawable
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -21,11 +22,10 @@ internal fun MainActivity.loadSettings() {
     topK              = prefs.getInt("top_k", 40)
     noThinking        = prefs.getBoolean("no_thinking", false)
     autoLoadLastModel = prefs.getBoolean("auto_load_last_model", false)
-    flashAttnMode     = prefs.getInt("flash_attn_mode", 1)  // 0=Kapalı, 1=Otomatik, 2=Açık
+    flashAttnMode     = prefs.getInt("flash_attn_mode", 1)
     useMmap           = prefs.getBoolean("use_mmap", true)
     useMlock          = prefs.getBoolean("use_mlock", false)
     bypassContextLength = prefs.getBoolean("bypass_context_length", false)
-    // v5.8: Tema ayarı
     appThemeMode      = prefs.getInt("app_theme_mode", MainActivity.THEME_SYSTEM)
 
     val oldEnabled = prefs.getBoolean("web_search_enabled", false)
@@ -41,7 +41,6 @@ internal fun MainActivity.loadSettings() {
     webSearchResultCount = prefs.getInt("web_search_result_count", 5)
     webPageFetchEnabled  = prefs.getBoolean("web_page_fetch_enabled", false)
 
-    // v5.5: URL okuma ayarları
     urlFetchEnabled   = prefs.getBoolean("url_fetch_enabled", true)
     urlFetchCharLimit = prefs.getInt("url_fetch_char_limit", 5000)
 
@@ -92,7 +91,6 @@ internal fun MainActivity.saveSettings() {
         .putBoolean("use_mmap", useMmap)
         .putBoolean("use_mlock", useMlock)
         .putBoolean("bypass_context_length", bypassContextLength)
-        // v5.8: Tema ayarı
         .putInt("app_theme_mode", appThemeMode)
         .putString("web_search_mode", webSearchMode)
         .putBoolean("web_search_enabled", webSearchEnabled)
@@ -103,7 +101,6 @@ internal fun MainActivity.saveSettings() {
         .putString("searxng_url", searxngUrl)
         .putInt("web_search_result_count", webSearchResultCount)
         .putBoolean("web_page_fetch_enabled", webPageFetchEnabled)
-        // v5.5: URL okuma ayarları
         .putBoolean("url_fetch_enabled", urlFetchEnabled)
         .putInt("url_fetch_char_limit", urlFetchCharLimit)
         .putString("char_name", charName)
@@ -112,28 +109,149 @@ internal fun MainActivity.saveSettings() {
         .apply()
 }
 
+// ── Yardımcı: Bölüm kartı ─────────────────────────────────────────────────────
+
+/**
+ * Ayarlar diyaloğundaki her kategoriyi görsel olarak ayıran kart yapısı.
+ * Üstte emoji + başlık bandı, altında içerik alanı.
+ * Dönen Pair: (kart LinearLayout, içerik LinearLayout)
+ */
+private fun MainActivity.makeSectionCard(
+    parent: LinearLayout,
+    emoji: String,
+    title: String
+): LinearLayout {
+    val dp = resources.displayMetrics.density
+    val isDark = MessageAdapter.isDarkTheme(this)
+
+    // Dış kart — hafif köşe yuvarlaklığı ve border
+    val card = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            topMargin    = (12 * dp).toInt()
+            bottomMargin = (2 * dp).toInt()
+        }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = (10 * dp)
+            setColor(if (isDark) 0xFF1C1C2E.toInt() else 0xFFF5F5FF.toInt())
+            setStroke((1 * dp).toInt(), if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
+        }
+    }
+
+    // Başlık bandı
+    val header = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            // Sadece üst köşeler yuvarlak
+            cornerRadii = floatArrayOf(
+                10*dp, 10*dp,  // üst-sol
+                10*dp, 10*dp,  // üst-sağ
+                0f, 0f,         // alt-sağ
+                0f, 0f          // alt-sol
+            )
+            setColor(if (isDark) 0xFF252540.toInt() else 0xFFEAEAFF.toInt())
+        }
+    }
+
+    val emojiTv = TextView(this).apply {
+        text = emoji
+        textSize = 16f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = (8 * dp).toInt() }
+    }
+
+    val titleTv = TextView(this).apply {
+        text = title
+        textSize = 13f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFCCCCFF.toInt() else 0xFF3333AA.toInt())
+    }
+
+    header.addView(emojiTv)
+    header.addView(titleTv)
+
+    // Ayırıcı çizgi
+    val divider = android.view.View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
+        )
+        setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
+    }
+
+    // İçerik alanı
+    val content = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt())
+    }
+
+    card.addView(header)
+    card.addView(divider)
+    card.addView(content)
+    parent.addView(card)
+
+    return content
+}
+
+/** Kart içinde küçük alt başlık (bold, biraz soluk) */
+private fun MainActivity.subLabel(text: String): TextView {
+    val dp = resources.displayMetrics.density
+    val isDark = MessageAdapter.isDarkTheme(this)
+    return TextView(this).apply {
+        this.text = text
+        textSize = 12f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFAAAAAA.toInt() else 0xFF666688.toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (10 * dp).toInt(); bottomMargin = (3 * dp).toInt() }
+    }
+}
+
+/** Açıklama metni — küçük, soluk */
+private fun MainActivity.hintText(text: String): TextView {
+    val dp = resources.displayMetrics.density
+    return TextView(this).apply {
+        this.text = text
+        textSize = 11f
+        alpha = 0.55f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (2 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
+    }
+}
+
 // ── Ayarlar diyaloğu ──────────────────────────────────────────────────────────
 
 internal fun MainActivity.showSettingsDialog() {
     val ctx = this
     val dp = resources.displayMetrics.density
+    val isDark = MessageAdapter.isDarkTheme(this)
+
     val scrollView = ScrollView(ctx)
     val layout = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding((16*dp).toInt(), (16*dp).toInt(), (16*dp).toInt(), (16*dp).toInt())
+        setPadding((12*dp).toInt(), (8*dp).toInt(), (12*dp).toInt(), (16*dp).toInt())
     }
     scrollView.addView(layout)
 
-    fun sectionTitle(text: String) = TextView(ctx).apply {
-        this.text = text; textSize = 14f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = (12*dp).toInt(); bottomMargin = (4*dp).toInt() }
-    }
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 1: MODEL PARAMETRELERİ
+    // ═══════════════════════════════════════════════════════════════════════
+    val secModel = makeSectionCard(layout, "🧠", "Model Parametreleri")
 
-    // ── Context Window ────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Context Window (token)"))
+    // Context Window
+    secModel.addView(subLabel("Context Window (token)"))
     val ctxRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -149,11 +267,13 @@ internal fun MainActivity.showSettingsDialog() {
         inputType = android.text.InputType.TYPE_CLASS_NUMBER
         layoutParams = LinearLayout.LayoutParams((72*dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
         gravity = android.view.Gravity.CENTER
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF2A2A3A.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAAAA.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
     ctxBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) ctxEdit.setText((ctxMin + p * ctxStep).toString()) }
@@ -169,14 +289,11 @@ internal fun MainActivity.showSettingsDialog() {
             if (ctxBar.progress != prog) ctxBar.progress = prog
         }
     })
-    ctxRow.addView(ctxBar); ctxRow.addView(ctxEdit); layout.addView(ctxRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Modelin toplam hafızası (256–32768). RAM kullanımını doğrudan etkiler. Model desteklemiyorsa llama.cpp kısıtlar."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    ctxRow.addView(ctxBar); ctxRow.addView(ctxEdit); secModel.addView(ctxRow)
+    secModel.addView(hintText("Modelin toplam hafızası (256–32768). RAM kullanımını doğrudan etkiler."))
 
-    // ── Generated Tokens ─────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Generated Tokens (yanıt uzunluğu)"))
+    // Generated Tokens
+    secModel.addView(subLabel("Generated Tokens (yanıt uzunluğu)"))
     val predictRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -192,11 +309,13 @@ internal fun MainActivity.showSettingsDialog() {
         inputType = android.text.InputType.TYPE_CLASS_NUMBER
         layoutParams = LinearLayout.LayoutParams((72*dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
         gravity = android.view.Gravity.CENTER
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF2A2A3A.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAAAA.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
     predictBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) predictEdit.setText((predictMin + p * predictStep).toString()) }
@@ -212,15 +331,12 @@ internal fun MainActivity.showSettingsDialog() {
             if (predictBar.progress != prog) predictBar.progress = prog
         }
     })
-    predictRow.addView(predictBar); predictRow.addView(predictEdit); layout.addView(predictRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Tek yanıtta üretilebilecek maksimum token sayısı (128–4096)."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    predictRow.addView(predictBar); predictRow.addView(predictEdit); secModel.addView(predictRow)
+    secModel.addView(hintText("Tek yanıtta üretilebilecek maksimum token (128–4096)."))
 
-    // ── Temperature ───────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Temperature: %.2f".format(temperature)))
-    val tempLabel = layout.getChildAt(layout.childCount - 1) as TextView
+    // Temperature
+    secModel.addView(subLabel("Temperature: %.2f".format(temperature)))
+    val tempLabel = secModel.getChildAt(secModel.childCount - 1) as TextView
     val tempBar = SeekBar(ctx).apply {
         max = 200; progress = (temperature * 100).toInt()
         setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -229,11 +345,11 @@ internal fun MainActivity.showSettingsDialog() {
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
     }
-    layout.addView(tempBar)
+    secModel.addView(tempBar)
 
-    // ── Top-P ─────────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Top-P: %.2f".format(topP)))
-    val topPLabel = layout.getChildAt(layout.childCount - 1) as TextView
+    // Top-P
+    secModel.addView(subLabel("Top-P: %.2f".format(topP)))
+    val topPLabel = secModel.getChildAt(secModel.childCount - 1) as TextView
     val topPBar = SeekBar(ctx).apply {
         max = 100; progress = (topP * 100).toInt()
         setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -242,11 +358,11 @@ internal fun MainActivity.showSettingsDialog() {
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
     }
-    layout.addView(topPBar)
+    secModel.addView(topPBar)
 
-    // ── Top-K ─────────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Top-K: $topK"))
-    val topKLabel = layout.getChildAt(layout.childCount - 1) as TextView
+    // Top-K
+    secModel.addView(subLabel("Top-K: $topK"))
+    val topKLabel = secModel.getChildAt(secModel.childCount - 1) as TextView
     val topKBar = SeekBar(ctx).apply {
         max = 200; progress = topK
         setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -255,346 +371,271 @@ internal fun MainActivity.showSettingsDialog() {
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
     }
-    layout.addView(topKBar)
+    secModel.addView(topKBar)
 
-    // ── Qwen3 ─────────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Qwen3 / Gemma 4 Düşünme Ayarı"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 2: DÜŞÜNME MODU
+    // ═══════════════════════════════════════════════════════════════════════
+    val secThink = makeSectionCard(layout, "💭", "Düşünme Modu (Qwen3 / Gemma 4)")
+
     val noThinkingRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
     val noThinkingLabel = TextView(ctx).apply {
-        text = "💭 Düşünme modunu kapat"; textSize = 13f
+        text = "Düşünme modunu kapat"
+        textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val noThinkingSwitch = Switch(ctx).apply { isChecked = noThinking }
-    noThinkingRow.addView(noThinkingLabel); noThinkingRow.addView(noThinkingSwitch); layout.addView(noThinkingRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Qwen3 için /no_think, Gemma 4 için <|think|> tokenını kapatır. Gereksiz düşünme bloklarını önler."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    noThinkingRow.addView(noThinkingLabel); noThinkingRow.addView(noThinkingSwitch)
+    secThink.addView(noThinkingRow)
+    secThink.addView(hintText("Qwen3 için /no_think, Gemma 4 için <|think|> tokenını kapatır."))
 
-    // ── Model Yükleme ─────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Model Yükleme"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 3: MODEL YÜKLEME & SOHBET
+    // ═══════════════════════════════════════════════════════════════════════
+    val secLoad = makeSectionCard(layout, "🚀", "Model Yükleme & Sohbet")
+
     val autoLoadRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
     val autoLoadLabel = TextView(ctx).apply {
-        text = "🚀 Son modeli otomatik yükle"; textSize = 13f
+        text = "Son modeli otomatik yükle"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val autoLoadSwitch = Switch(ctx).apply { isChecked = autoLoadLastModel }
-    autoLoadRow.addView(autoLoadLabel); autoLoadRow.addView(autoLoadSwitch); layout.addView(autoLoadRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Uygulama açılınca son yüklü model otomatik hazırlanır."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    autoLoadRow.addView(autoLoadLabel); autoLoadRow.addView(autoLoadSwitch)
+    secLoad.addView(autoLoadRow)
+    secLoad.addView(hintText("Uygulama açılınca son yüklü model otomatik hazırlanır."))
 
-    // ── Bypass Context Length ─────────────────────────────────────────────────
-    layout.addView(sectionTitle("Sohbet"))
     val bypassRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
     }
     val bypassLabel = TextView(ctx).apply {
-        text = "🔁 Bypass Context Length (sonsuz sohbet)"; textSize = 13f
+        text = "Bypass Context Length (sonsuz sohbet)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val bypassSwitch = Switch(ctx).apply { isChecked = bypassContextLength }
-    bypassRow.addView(bypassLabel); bypassRow.addView(bypassSwitch); layout.addView(bypassRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Her turda context sıfırlanır ve son mesajlar baştan encode edilir. " +
-               "KV shifting olmaz; model bağlamı her zaman tutarlı kalır. " +
-               "İlk token biraz daha geç gelebilir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    bypassRow.addView(bypassLabel); bypassRow.addView(bypassSwitch)
+    secLoad.addView(bypassRow)
+    secLoad.addView(hintText("Her turda context sıfırlanır, son mesajlar baştan encode edilir. İlk token biraz daha geç gelebilir."))
 
-    // ── Performans ────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Performans"))
-    layout.addView(TextView(ctx).apply {
-        text = "⚡ Flash Attention"; textSize = 13f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = (4*dp).toInt() }
-    })
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 4: PERFORMANS
+    // ═══════════════════════════════════════════════════════════════════════
+    val secPerf = makeSectionCard(layout, "⚡", "Performans")
+
+    secPerf.addView(subLabel("Flash Attention"))
     val flashAttnGroup = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL }
     val rbFlashOff  = RadioButton(ctx).apply {
-        text = "⛔ Kapalı"; id = android.view.View.generateViewId()
-        isChecked = (flashAttnMode == 0)
+        text = "⛔ Kapalı"; id = android.view.View.generateViewId(); isChecked = (flashAttnMode == 0)
         layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     val rbFlashAuto = RadioButton(ctx).apply {
-        text = "✨ Otomatik"; id = android.view.View.generateViewId()
-        isChecked = (flashAttnMode == 1)
+        text = "✨ Otomatik"; id = android.view.View.generateViewId(); isChecked = (flashAttnMode == 1)
         layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     val rbFlashOn   = RadioButton(ctx).apply {
-        text = "⚡ Açık"; id = android.view.View.generateViewId()
-        isChecked = (flashAttnMode == 2)
+        text = "⚡ Açık"; id = android.view.View.generateViewId(); isChecked = (flashAttnMode == 2)
         layoutParams = RadioGroup.LayoutParams(0, RadioGroup.LayoutParams.WRAP_CONTENT, 1f)
     }
     flashAttnGroup.addView(rbFlashOff); flashAttnGroup.addView(rbFlashAuto); flashAttnGroup.addView(rbFlashOn)
-    layout.addView(flashAttnGroup)
-    layout.addView(TextView(ctx).apply {
-        text = "Otomatik: model destekliyorsa açar (önerilen, llama.cpp varsayılanı). " +
-               "Açık: zorla etkinleştirir — desteklenmeyen modellerde sorun çıkabilir. " +
-               "Değişiklik sonraki model yüklemede etkinleşir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secPerf.addView(flashAttnGroup)
+    secPerf.addView(hintText("Otomatik: model destekliyorsa açar (önerilen). Değişiklik sonraki model yüklemede etkinleşir."))
 
     val mmapRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
     }
     val mmapLabel = TextView(ctx).apply {
-        text = "🗂️ Use mmap (bellek eşleme)"; textSize = 13f
+        text = "Use mmap (bellek eşleme)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val mmapSwitch = Switch(ctx).apply { isChecked = useMmap }
-    mmapRow.addView(mmapLabel); mmapRow.addView(mmapSwitch); layout.addView(mmapRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Modeli RAM'e kopyalamak yerine doğrudan diskten okur. Açık olması önerilir. Değişiklik sonraki model yüklemede etkinleşir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    mmapRow.addView(mmapLabel); mmapRow.addView(mmapSwitch); secPerf.addView(mmapRow)
+    secPerf.addView(hintText("Modeli RAM'e kopyalamak yerine doğrudan diskten okur. Açık olması önerilir."))
 
     val mlockRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
     }
     val mlockLabel = TextView(ctx).apply {
-        text = "🔒 Use mlock (RAM'de kilitle)"; textSize = 13f
+        text = "Use mlock (RAM'de kilitle)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val mlockSwitch = Switch(ctx).apply { isChecked = useMlock }
-    mlockRow.addView(mlockLabel); mlockRow.addView(mlockSwitch); layout.addView(mlockRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Modeli swap'a yazılmaktan korur. Büyük modellerde RAM yetersizse kapatın. Değişiklik sonraki model yüklemede etkinleşir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    mlockRow.addView(mlockLabel); mlockRow.addView(mlockSwitch); secPerf.addView(mlockRow)
+    secPerf.addView(hintText("Modeli swap'a yazılmaktan korur. Büyük modellerde RAM yetersizse kapatın."))
 
-    // ── İnternet Araması ──────────────────────────────────────────────────────
-    layout.addView(sectionTitle("🌐 İnternet Araması"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 5: İNTERNET ARAMASI
+    // ═══════════════════════════════════════════════════════════════════════
+    val secWeb = makeSectionCard(layout, "🌐", "İnternet Araması")
 
-    layout.addView(TextView(ctx).apply {
-        text = "Arama Modu"; textSize = 12f; alpha = 0.75f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secWeb.addView(subLabel("Arama Modu"))
     val modeGroup = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
-    val rbModeOff     = RadioButton(ctx).apply { text = "⛔ Kapalı — web araması yapma"; id = android.view.View.generateViewId(); isChecked = (webSearchMode == "off") }
+    val rbModeOff     = RadioButton(ctx).apply { text = "⛔ Kapalı"; id = android.view.View.generateViewId(); isChecked = (webSearchMode == "off") }
     val rbModeTrigger = RadioButton(ctx).apply { text = "🔍 Tetikleyici — anahtar kelime içeriyorsa ara"; id = android.view.View.generateViewId(); isChecked = (webSearchMode == "trigger") }
     val rbModeAlways  = RadioButton(ctx).apply { text = "🌐 Her zaman — tüm mesajlarda ara"; id = android.view.View.generateViewId(); isChecked = (webSearchMode == "always") }
     modeGroup.addView(rbModeOff); modeGroup.addView(rbModeTrigger); modeGroup.addView(rbModeAlways)
-    layout.addView(modeGroup)
-    layout.addView(TextView(ctx).apply {
-        text = "Tetikleyici mod: sadece \"internette ara\", \"son haberler\" gibi tetikleyici içeren mesajlarda arama yapar. Her zaman mod: merhaba, teşekkür gibi mesajlarda da arama yapar."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (10*dp).toInt() }
-    })
+    secWeb.addView(modeGroup)
+    secWeb.addView(hintText("Tetikleyici mod: sadece \"internette ara\", \"son haberler\" gibi ifadeler içeren mesajlarda çalışır."))
 
-    layout.addView(TextView(ctx).apply {
-        text = "Sorgu Oluşturma"; textSize = 12f; alpha = 0.75f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secWeb.addView(subLabel("Sorgu Oluşturma"))
     val queryGroup = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
     val rbQuerySimple = RadioButton(ctx).apply { text = "✂️ Basit — tetikleyicileri sil, kalan metni kullan"; id = android.view.View.generateViewId(); isChecked = (webSearchQueryMode == "simple") }
     val rbQuerySmart  = RadioButton(ctx).apply { text = "🧠 Akıllı — anahtar kelime + varlık çıkarımı (önerilen)"; id = android.view.View.generateViewId(); isChecked = (webSearchQueryMode == "smart") }
     queryGroup.addView(rbQuerySimple); queryGroup.addView(rbQuerySmart)
-    layout.addView(queryGroup)
-    layout.addView(TextView(ctx).apply {
-        text = "Akıllı mod: uzun mesajdan isimleri, markaları, önemli kelimeleri otomatik çıkarır."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (10*dp).toInt() }
-    })
+    secWeb.addView(queryGroup)
 
-    layout.addView(TextView(ctx).apply {
-        text = "Tetikleyici Kelimeler"; textSize = 12f; alpha = 0.75f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secWeb.addView(subLabel("Tetikleyici Kelimeler"))
     val triggersEdit = android.widget.EditText(ctx).apply {
         setText(webSearchTriggers.joinToString("\n"))
         hint = "Her satıra bir tetikleyici kelime"
-        minLines = 5; maxLines = 10; isSingleLine = false
+        minLines = 4; maxLines = 8; isSingleLine = false
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        setTextColor(0xFFE0E0E0.toInt()); setHintTextColor(0xFF666666.toInt())
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 8*dp; setColor(0xFF1E1E1E.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setHintTextColor(if (isDark) 0xFF666666.toInt() else 0xFF999999.toInt())
+        background = GradientDrawable().apply {
+            cornerRadius = 8*dp
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
         }
         setPadding((10*dp).toInt(), (8*dp).toInt(), (10*dp).toInt(), (8*dp).toInt())
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (2*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
     }
-    layout.addView(triggersEdit)
+    secWeb.addView(triggersEdit)
     val resetTriggersBtn = android.widget.Button(ctx).apply {
-        text = "↩ Varsayılanlara Sıfırla"; textSize = 12f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (10*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF1A2A3A.toInt()) }
-        setTextColor(0xFF88AAFF.toInt())
+        text = "↩ Varsayılanlara Sıfırla"; textSize = 12f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF1A2A3A.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
     }
     resetTriggersBtn.setOnClickListener { triggersEdit.setText(getDefaultTriggers().joinToString("\n")) }
-    layout.addView(resetTriggersBtn)
+    secWeb.addView(resetTriggersBtn)
 
-    layout.addView(TextView(ctx).apply {
-        text = "Arama Motoru"; textSize = 12f; alpha = 0.75f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt(); bottomMargin = (4*dp).toInt() }
-    })
+    secWeb.addView(subLabel("Arama Motoru"))
     val engineGroup = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
     val rbDDG     = RadioButton(ctx).apply { text = "DuckDuckGo (ücretsiz, API anahtarı gereksiz)"; id = android.view.View.generateViewId(); isChecked = (webSearchEngine == "duckduckgo") }
     val rbBrave   = RadioButton(ctx).apply { text = "Brave Search (ücretsiz, API anahtarı gerekir)"; id = android.view.View.generateViewId(); isChecked = (webSearchEngine == "brave") }
     val rbSearxng = RadioButton(ctx).apply { text = "SearXNG (açık kaynak, kendi instance)"; id = android.view.View.generateViewId(); isChecked = (webSearchEngine == "searxng") }
     engineGroup.addView(rbDDG); engineGroup.addView(rbBrave); engineGroup.addView(rbSearxng)
-    layout.addView(engineGroup)
+    secWeb.addView(engineGroup)
 
-    layout.addView(TextView(ctx).apply {
-        text = "Brave API Anahtarı (Brave seçiliyse)"; textSize = 12f; alpha = 0.75f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt(); bottomMargin = (2*dp).toInt() }
-    })
+    secWeb.addView(subLabel("Brave API Anahtarı (Brave seçiliyse)"))
     val braveKeyEdit = android.widget.EditText(ctx).apply {
         setText(braveApiKey)
         hint = "BSA... (brave.com/search/api adresinden alın)"
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
-    layout.addView(braveKeyEdit)
+    secWeb.addView(braveKeyEdit)
 
-    layout.addView(TextView(ctx).apply {
-        text = "SearXNG Instance URL (SearXNG seçiliyse)"; textSize = 12f; alpha = 0.75f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt(); bottomMargin = (2*dp).toInt() }
-    })
+    secWeb.addView(subLabel("SearXNG Instance URL (SearXNG seçiliyse)"))
     val searxngUrlEdit = android.widget.EditText(ctx).apply {
         setText(searxngUrl)
         hint = "https://searx.be"
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
-    layout.addView(searxngUrlEdit)
-    layout.addView(TextView(ctx).apply {
-        text = "Herkese açık SearXNG instance örnekleri: searx.be, search.bus-hit.me, search.ononoki.org"; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secWeb.addView(searxngUrlEdit)
+    secWeb.addView(hintText("Örnekler: searx.be, search.bus-hit.me, search.ononoki.org"))
 
     val resultCountInitial = webSearchResultCount.coerceIn(1, 10)
-    layout.addView(TextView(ctx).apply {
-        text = "Sonuç Sayısı: $resultCountInitial"; textSize = 12f; alpha = 0.75f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt(); bottomMargin = (2*dp).toInt() }
-    })
-    val resultCountLabel = layout.getChildAt(layout.childCount - 1) as TextView
+    secWeb.addView(subLabel("Sonuç Sayısı: $resultCountInitial"))
+    val resultCountLabel = secWeb.getChildAt(secWeb.childCount - 1) as TextView
     val resultCountBar = SeekBar(ctx).apply {
-        max = 9
-        progress = resultCountInitial - 1
+        max = 9; progress = resultCountInitial - 1
         setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { resultCountLabel.text = "Sonuç Sayısı: ${p + 1}" }
             override fun onStartTrackingTouch(sb: SeekBar) {}
             override fun onStopTrackingTouch(sb: SeekBar) {}
         })
     }
-    layout.addView(resultCountBar)
-    layout.addView(TextView(ctx).apply {
-        text = "Modele gönderilecek arama sonucu sayısı (1–10). Az sonuç = daha az token tüketimi."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    secWeb.addView(resultCountBar)
+    secWeb.addView(hintText("Modele gönderilecek arama sonucu (1–10). Az sonuç = daha az token."))
 
     val fetchRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
     }
     val fetchLabel = TextView(ctx).apply {
-        text = "📄 Sayfa içeriğini de getir (daha doğru)"; textSize = 13f
+        text = "Sayfa içeriğini de getir (daha doğru)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val fetchSwitch = Switch(ctx).apply { isChecked = webPageFetchEnabled }
-    fetchRow.addView(fetchLabel); fetchRow.addView(fetchSwitch); layout.addView(fetchRow)
-    layout.addView(TextView(ctx).apply {
-        text = "İlk 2 sonucun sayfasını açar ve içeriğini modele gönderir. Dolar kuru, hava durumu gibi anlık verilerde çok daha doğru. Biraz daha yavaş (~2-5 sn ekstra)."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
-    })
+    fetchRow.addView(fetchLabel); fetchRow.addView(fetchSwitch); secWeb.addView(fetchRow)
+    secWeb.addView(hintText("İlk 2 sonucun sayfasını açar ve içeriğini modele gönderir. ~2-5 sn ekstra süre."))
 
-    // ── URL Okuma (v5.5) ──────────────────────────────────────────────────────
-    layout.addView(sectionTitle("🔗 URL Okuma"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 6: URL OKUMA
+    // ═══════════════════════════════════════════════════════════════════════
+    val secUrl = makeSectionCard(layout, "🔗", "URL Okuma")
 
     val urlFetchRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
     val urlFetchLabel = TextView(ctx).apply {
-        text = "🔗 URL'leri otomatik oku"; textSize = 13f
+        text = "URL'leri otomatik oku"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val urlFetchSwitch = Switch(ctx).apply { isChecked = urlFetchEnabled }
-    urlFetchRow.addView(urlFetchLabel); urlFetchRow.addView(urlFetchSwitch); layout.addView(urlFetchRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Mesajında bir URL varsa Maya o sayfayı otomatik çeker ve içeriği modele iletir. " +
-               "Web araması kapalı olsa bile çalışır. " +
-               "Makale çevirisi, özetleme ve analiz için kullanışlıdır."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    urlFetchRow.addView(urlFetchLabel); urlFetchRow.addView(urlFetchSwitch); secUrl.addView(urlFetchRow)
+    secUrl.addView(hintText("Mesajında URL varsa Maya o sayfayı çeker ve modele iletir. Web araması kapalıyken de çalışır."))
 
-    layout.addView(TextView(ctx).apply {
-        text = "Sayfa başına maksimum karakter"; textSize = 12f; alpha = 0.75f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    secUrl.addView(subLabel("Sayfa başına maksimum karakter"))
     val urlCharLimitRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (2*dp).toInt() }
     }
     val urlCharLimitEdit = android.widget.EditText(ctx).apply {
-        setText(urlFetchCharLimit.toString())
-        inputType = android.text.InputType.TYPE_CLASS_NUMBER
-        hint = "5000"
+        setText(urlFetchCharLimit.toString()); inputType = android.text.InputType.TYPE_CLASS_NUMBER; hint = "5000"
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setHintTextColor(0xFF666666.toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setHintTextColor(if (isDark) 0xFF666666.toInt() else 0xFF999999.toInt())
         setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
-    val btn2k = android.widget.Button(ctx).apply {
-        text = "2K"; textSize = 11f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (6*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF1A2A3A.toInt()) }
-        setTextColor(0xFF88AAFF.toInt())
-        setOnClickListener { urlCharLimitEdit.setText("2000") }
-    }
-    val btn5k = android.widget.Button(ctx).apply {
-        text = "5K"; textSize = 11f
+    fun quickBtn(label: String, bgColor: Int, textColor: Int, value: String) = android.widget.Button(ctx).apply {
+        text = label; textSize = 11f; isAllCaps = false
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF1A3A1A.toInt()) }
-        setTextColor(0xFF88FF88.toInt())
-        setOnClickListener { urlCharLimitEdit.setText("5000") }
-    }
-    val btn10k = android.widget.Button(ctx).apply {
-        text = "10K"; textSize = 11f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF3A1A1A.toInt()) }
-        setTextColor(0xFFFF8888.toInt())
-        setOnClickListener { urlCharLimitEdit.setText("10000") }
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(bgColor) }
+        setTextColor(textColor)
+        setOnClickListener { urlCharLimitEdit.setText(value) }
     }
     urlCharLimitRow.addView(urlCharLimitEdit)
-    urlCharLimitRow.addView(btn2k)
-    urlCharLimitRow.addView(btn5k)
-    urlCharLimitRow.addView(btn10k)
-    layout.addView(urlCharLimitRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Daha fazla karakter = daha uzun makaleler okunabilir ama model context'ini doldurabilir. " +
-               "2K: hızlı/kısa  •  5K: önerilen  •  10K: uzun makaleler (büyük context gerektirir)."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt(); bottomMargin = (12*dp).toInt() }
-    })
+    urlCharLimitRow.addView(quickBtn("2K", if (isDark) 0xFF1A2A3A.toInt() else 0xFFDDEEFF.toInt(), if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt(), "2000"))
+    urlCharLimitRow.addView(quickBtn("5K", if (isDark) 0xFF1A3A1A.toInt() else 0xFFDDFFDD.toInt(), if (isDark) 0xFF88FF88.toInt() else 0xFF226622.toInt(), "5000"))
+    urlCharLimitRow.addView(quickBtn("10K", if (isDark) 0xFF3A1A1A.toInt() else 0xFFFFDDDD.toInt(), if (isDark) 0xFFFF8888.toInt() else 0xFFAA2222.toInt(), "10000"))
+    secUrl.addView(urlCharLimitRow)
+    secUrl.addView(hintText("2K: hızlı/kısa  •  5K: önerilen  •  10K: uzun makaleler (büyük context gerektirir)"))
 
-    // ── Rapor Modeli (Global) ─────────────────────────────────────────────────
-    layout.addView(sectionTitle("🤖 Rapor Modeli"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 7: RAPOR MODELİ
+    // ═══════════════════════════════════════════════════════════════════════
+    val secReportModel = makeSectionCard(layout, "🤖", "Rapor Modeli")
 
     val reportPrefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     var reportModelEntry    = reportPrefs.getString(DailyReportWorker.KEY_REPORT_MODEL_ENTRY, null)
@@ -612,26 +653,24 @@ internal fun MainActivity.showSettingsDialog() {
     }
     val reportModelNameLabel = TextView(ctx).apply {
         text = reportModelDisplayName(); textSize = 12f
-        setTextColor(0xFFB0C8FF.toInt())
+        setTextColor(if (isDark) 0xFFB0C8FF.toInt() else 0xFF2244AA.toInt())
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
     }
     val reportModelSelectBtn = android.widget.Button(ctx).apply {
-        text = "Seç"; textSize = 12f
+        text = "Seç"; textSize = 12f; isAllCaps = false
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF1A3A5C.toInt()) }
-        setTextColor(0xFF88AAFF.toInt())
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF1A3A5C.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
     }
     val reportModelClearBtn = android.widget.Button(ctx).apply {
         text = "✕"; textSize = 12f
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(0xFF3A1A1A.toInt()) }
-        setTextColor(0xFFFF8888.toInt())
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF3A1A1A.toInt() else 0xFFFFDDDD.toInt()) }
+        setTextColor(if (isDark) 0xFFFF8888.toInt() else 0xFFAA2222.toInt())
     }
-    reportModelRow.addView(reportModelNameLabel)
-    reportModelRow.addView(reportModelSelectBtn)
-    reportModelRow.addView(reportModelClearBtn)
-    layout.addView(reportModelRow)
+    reportModelRow.addView(reportModelNameLabel); reportModelRow.addView(reportModelSelectBtn); reportModelRow.addView(reportModelClearBtn)
+    secReportModel.addView(reportModelRow)
 
     reportModelSelectBtn.setOnClickListener {
         val savedModels = reportPrefs.getStringSet("saved_models", mutableSetOf())!!.toMutableList()
@@ -656,69 +695,45 @@ internal fun MainActivity.showSettingsDialog() {
             .setItems(names) { _, which ->
                 reportModelEntry = cachedModels[which]
                 reportModelNameLabel.text = reportModelDisplayName()
-            }
-            .setNegativeButton("İptal", null)
-            .show()
+            }.setNegativeButton("İptal", null).show()
     }
-
     reportModelClearBtn.setOnClickListener {
-        reportModelEntry = null
-        reportModelNameLabel.text = reportModelDisplayName()
+        reportModelEntry = null; reportModelNameLabel.text = reportModelDisplayName()
     }
+    secReportModel.addView(hintText("Sadece önbellekte hazır modeller listelenir. Ayarlanmazsa son yüklenen model kullanılır."))
 
-    layout.addView(TextView(ctx).apply {
-        text = "Sadece daha önce uygulamada yüklenmiş (önbellekte hazır) modeller listelenir. " +
-               "Ayarlanmazsa en son yüklenen model kullanılır."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
-
-    layout.addView(TextView(ctx).apply {
-        text = "Şablon"; textSize = 12f; alpha = 0.75f
-        setTypeface(null, android.graphics.Typeface.BOLD)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
-    // Tüm şablon isimleri — index 0..7 + "Model varsayılanı" başa ekleniyor
+    secReportModel.addView(subLabel("Şablon"))
     val templateNames = DailyReportWorker.TEMPLATE_NAMES
     val templateDisplayNames = arrayOf("Model varsayılanı (önerilen)") + templateNames
     var currentTemplateSelection = if (reportModelTemplate < 0) 0 else reportModelTemplate + 1
-
     val templateGroup = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
     val templateRadios = templateDisplayNames.mapIndexed { i, name ->
         RadioButton(ctx).apply {
-            text = name; id = android.view.View.generateViewId()
-            isChecked = (i == currentTemplateSelection)
-            setTextColor(0xFFE0E0E0.toInt())
+            text = name; id = android.view.View.generateViewId(); isChecked = (i == currentTemplateSelection)
             setOnCheckedChangeListener { _, checked -> if (checked) currentTemplateSelection = i }
         }
     }
     templateRadios.forEach { templateGroup.addView(it) }
-    layout.addView(templateGroup)
-    layout.addView(TextView(ctx).apply {
-        text = "Rapor özetlemesi için kullanılacak konuşma şablonu. " +
-               "\"Model varsayılanı\" seçiliyse GGUF metadata'sındaki şablon kullanılır. " +
-               "Qwen3/Qwen3.5 için ChatML, Gemma 3 için Gemma 3, Gemma 4 için Gemma 4 seçin."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
-    })
+    secReportModel.addView(templateGroup)
 
     val reportNoThinkRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt() }
     }
     val reportNoThinkLabel = TextView(ctx).apply {
-        text = "💭 Düşünmeyi kapat (Qwen3 / Gemma 4)"; textSize = 13f
+        text = "Düşünmeyi kapat (Qwen3 / Gemma 4)"; textSize = 13f
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     @Suppress("DEPRECATION") val reportNoThinkSwitch = Switch(ctx).apply { isChecked = reportModelNoThink }
     reportNoThinkRow.addView(reportNoThinkLabel); reportNoThinkRow.addView(reportNoThinkSwitch)
-    layout.addView(reportNoThinkRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Qwen3'te <think> bloğunu, Gemma 4'te <|think|> tokenını devre dışı bırakır. " +
-               "Token tasarrufu sağlar. Diğer modelleri etkilemez."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
-    })
+    secReportModel.addView(reportNoThinkRow)
+    secReportModel.addView(hintText("Token tasarrufu sağlar. Diğer modelleri etkilemez."))
 
-    // ── Rapor Context Boyutu ─────────────────────────────────────────────────
-    layout.addView(sectionTitle("📐 Rapor Context Boyutu (token)"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 8: RAPOR CONTEXT BOYUTU
+    // ═══════════════════════════════════════════════════════════════════════
+    val secReportCtx = makeSectionCard(layout, "📐", "Rapor Context Boyutu")
+
     val reportCtxPrefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     var reportContextSize = reportCtxPrefs.getInt("report_context_size", 8192)
     val rCtxRow = LinearLayout(ctx).apply {
@@ -732,15 +747,16 @@ internal fun MainActivity.showSettingsDialog() {
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     }
     val rCtxEdit = android.widget.EditText(ctx).apply {
-        setText(reportContextSize.toString())
-        inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        setText(reportContextSize.toString()); inputType = android.text.InputType.TYPE_CLASS_NUMBER
         layoutParams = LinearLayout.LayoutParams((80*dp).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
         gravity = android.view.Gravity.CENTER
-        background = android.graphics.drawable.GradientDrawable().apply {
-            shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-            cornerRadius = (8*dp); setColor(0xFF2A2A2A.toInt()); setStroke((1*dp).toInt(), 0xFF555577.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF2A2A3A.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
         }
-        setTextColor(0xFFE0E0E0.toInt()); setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
     }
     rCtxBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) rCtxEdit.setText((rCtxMin + p * rCtxStep).toString()) }
@@ -756,22 +772,19 @@ internal fun MainActivity.showSettingsDialog() {
             if (rCtxBar.progress != prog) rCtxBar.progress = prog
         }
     })
-    rCtxRow.addView(rCtxBar); rCtxRow.addView(rCtxEdit); layout.addView(rCtxRow)
-    layout.addView(TextView(ctx).apply {
-        text = "Rapor özetleme sırasında kullanılacak context boyutu (2048–32768). " +
-               "Thinking modeli kapalıysa 8192 genellikle yeterli. " +
-               "Thinking açıksa veya haberler uzunsa 16384+ önerilebilir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
-    })
+    rCtxRow.addView(rCtxBar); rCtxRow.addView(rCtxEdit); secReportCtx.addView(rCtxRow)
+    secReportCtx.addView(hintText("Thinking kapalıysa 8192 yeterli. Thinking açıksa 16384+ önerilebilir."))
 
-    // ── Rapor Profilleri ──────────────────────────────────────────────────────
-    layout.addView(sectionTitle("📰 Rapor Profilleri"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 9: RAPOR PROFİLLERİ
+    // ═══════════════════════════════════════════════════════════════════════
+    val secProfiles = makeSectionCard(layout, "📰", "Rapor Profilleri")
 
     val profileListContainer = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
-    layout.addView(profileListContainer)
+    secProfiles.addView(profileListContainer)
 
     fun refreshProfileList() {
         profileListContainer.removeAllViews()
@@ -783,43 +796,27 @@ internal fun MainActivity.showSettingsDialog() {
         }
         reportProfiles.forEachIndexed { idx, profile ->
             val row = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
                 layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-                background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 8*dp; setColor(0xFF252535.toInt()) }
-                setPadding((8*dp).toInt(), (4*dp).toInt(), (4*dp).toInt(), (4*dp).toInt())
-                minimumHeight = (48*dp).toInt()
+                background = GradientDrawable().apply { cornerRadius = 8*dp; setColor(if (isDark) 0xFF252535.toInt() else 0xFFEEEEFF.toInt()) }
+                setPadding((8*dp).toInt(), (4*dp).toInt(), (4*dp).toInt(), (4*dp).toInt()); minimumHeight = (48*dp).toInt()
             }
-
             @Suppress("DEPRECATION") val toggle = Switch(ctx).apply {
                 isChecked = profile.enabled
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL
-                }
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
             }
-
             val nameTime = TextView(ctx).apply {
                 text = "%s  %d:%02d".format(profile.name, profile.hour, profile.minute)
-                textSize = 13f; setTextColor(0xFFE0E0E0.toInt()); maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL
-                    marginStart = (10*dp).toInt(); marginEnd = (4*dp).toInt()
-                }
+                textSize = 13f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = android.view.Gravity.CENTER_VERTICAL; marginStart = (10*dp).toInt(); marginEnd = (4*dp).toInt() }
             }
-
             fun iconBtn(label: String, color: Int) = android.widget.Button(ctx).apply {
-                text = label; textSize = 14f
-                setBackgroundColor(0x00000000); setTextColor(color)
-                setPadding((10*dp).toInt(), 0, (10*dp).toInt(), 0)
-                minWidth = 0; minimumWidth = 0
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL
-                }
+                text = label; textSize = 14f; setBackgroundColor(0x00000000); setTextColor(color)
+                setPadding((10*dp).toInt(), 0, (10*dp).toInt(), 0); minWidth = 0; minimumWidth = 0
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { gravity = android.view.Gravity.CENTER_VERTICAL }
             }
             val testBtn = iconBtn("▶", 0xFF55CC77.toInt())
-            val editBtn = iconBtn("✎", 0xFF88AAFF.toInt())
-
+            val editBtn = iconBtn("✎", if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
             toggle.setOnCheckedChangeListener { _, checked ->
                 reportProfiles[idx] = profile.copy(enabled = checked)
                 ReportProfile.saveAll(this, reportProfiles)
@@ -829,37 +826,27 @@ internal fun MainActivity.showSettingsDialog() {
             editBtn.setOnClickListener { showProfileEditDialog(profile) { refreshProfileList() } }
             testBtn.setOnClickListener {
                 try {
-                    getSharedPreferences(DailyReportWorker.PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit().remove("last_worker_error").apply()
-                    val data = androidx.work.Data.Builder()
-                        .putString("profile_id", profile.id).build()
-                    val req = androidx.work.OneTimeWorkRequestBuilder<DailyReportWorker>()
-                        .setInputData(data).build()
+                    getSharedPreferences(DailyReportWorker.PREFS_NAME, Context.MODE_PRIVATE).edit().remove("last_worker_error").apply()
+                    val data = androidx.work.Data.Builder().putString("profile_id", profile.id).build()
+                    val req = androidx.work.OneTimeWorkRequestBuilder<DailyReportWorker>().setInputData(data).build()
                     val wm = androidx.work.WorkManager.getInstance(applicationContext)
                     wm.enqueue(req)
                     wm.getWorkInfoByIdLiveData(req.id).observe(this@showSettingsDialog) { info ->
                         if (info == null) return@observe
                         when (info.state) {
-                            androidx.work.WorkInfo.State.SUCCEEDED -> runOnUiThread {
-                                Toast.makeText(ctx, "✅ '${profile.name}' tamamlandı", Toast.LENGTH_SHORT).show()
-                            }
+                            androidx.work.WorkInfo.State.SUCCEEDED -> runOnUiThread { Toast.makeText(ctx, "✅ '${profile.name}' tamamlandı", Toast.LENGTH_SHORT).show() }
                             androidx.work.WorkInfo.State.FAILED -> runOnUiThread {
-                                val err = getSharedPreferences(DailyReportWorker.PREFS_NAME, Context.MODE_PRIVATE)
-                                    .getString("last_worker_error", "Bilinmeyen hata") ?: "Bilinmeyen hata"
-                                android.app.AlertDialog.Builder(this@showSettingsDialog)
-                                    .setTitle("❌ Worker Hatası").setMessage(err)
-                                    .setPositiveButton("Tamam", null).show()
+                                val err = getSharedPreferences(DailyReportWorker.PREFS_NAME, Context.MODE_PRIVATE).getString("last_worker_error", "Bilinmeyen hata") ?: "Bilinmeyen hata"
+                                android.app.AlertDialog.Builder(this@showSettingsDialog).setTitle("❌ Worker Hatası").setMessage(err).setPositiveButton("Tamam", null).show()
                             }
                             else -> {}
                         }
                     }
                     Toast.makeText(ctx, "▶ '${profile.name}' başlatıldı…", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    android.app.AlertDialog.Builder(ctx).setTitle("❌ Hata").setMessage(e.message)
-                        .setPositiveButton("Tamam", null).show()
+                    android.app.AlertDialog.Builder(ctx).setTitle("❌ Hata").setMessage(e.message).setPositiveButton("Tamam", null).show()
                 }
             }
-
             row.addView(toggle); row.addView(nameTime); row.addView(testBtn); row.addView(editBtn)
             profileListContainer.addView(row)
         }
@@ -867,69 +854,59 @@ internal fun MainActivity.showSettingsDialog() {
     refreshProfileList()
 
     val addProfileBtn = android.widget.Button(ctx).apply {
-        text = "+ Profil Ekle"; textSize = 13f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt(); bottomMargin = (4*dp).toInt() }
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 8*dp; setColor(0xFF1A3A5C.toInt()) }
-        setTextColor(0xFF88AAFF.toInt())
+        text = "+ Profil Ekle"; textSize = 13f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 8*dp; setColor(if (isDark) 0xFF1A3A5C.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
     }
     addProfileBtn.setOnClickListener { showProfileEditDialog(null) { refreshProfileList() } }
-    layout.addView(addProfileBtn)
-    layout.addView(TextView(ctx).apply {
-        text = "Her profil kendi saatinde çalışır ve ayrı bildirim gönderir. https:// ile başlayan konular RSS olarak çekilir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
-    })
+    secProfiles.addView(addProfileBtn)
+    secProfiles.addView(hintText("Her profil kendi saatinde çalışır. https:// ile başlayan konular RSS olarak çekilir."))
 
-    // ── Tema (v5.8) ───────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("🌓 Uygulama Teması"))
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 10: UYGULAMA TEMASI
+    // ═══════════════════════════════════════════════════════════════════════
+    val secTheme = makeSectionCard(layout, "🌓", "Uygulama Teması")
+
     val themeGroup = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL }
-    val rbThemeSystem = RadioButton(ctx).apply {
-        text = "⚙️ Sistem"; id = android.view.View.generateViewId()
-        isChecked = (appThemeMode == MainActivity.THEME_SYSTEM)
-    }
-    val rbThemeDark = RadioButton(ctx).apply {
-        text = "🌙 Karanlık"; id = android.view.View.generateViewId()
-        isChecked = (appThemeMode == MainActivity.THEME_DARK)
-    }
-    val rbThemeLight = RadioButton(ctx).apply {
-        text = "☀️ Aydınlık"; id = android.view.View.generateViewId()
-        isChecked = (appThemeMode == MainActivity.THEME_LIGHT)
-    }
+    val rbThemeSystem = RadioButton(ctx).apply { text = "⚙️ Sistem"; id = android.view.View.generateViewId(); isChecked = (appThemeMode == MainActivity.THEME_SYSTEM) }
+    val rbThemeDark   = RadioButton(ctx).apply { text = "🌙 Karanlık"; id = android.view.View.generateViewId(); isChecked = (appThemeMode == MainActivity.THEME_DARK) }
+    val rbThemeLight  = RadioButton(ctx).apply { text = "☀️ Aydınlık"; id = android.view.View.generateViewId(); isChecked = (appThemeMode == MainActivity.THEME_LIGHT) }
     themeGroup.addView(rbThemeSystem); themeGroup.addView(rbThemeDark); themeGroup.addView(rbThemeLight)
-    layout.addView(themeGroup)
-    layout.addView(TextView(ctx).apply {
-        text = "Değişiklik kaydedilince hemen uygulanır."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
-    })
+    secTheme.addView(themeGroup)
+    secTheme.addView(hintText("Değişiklik kaydedilince hemen uygulanır."))
 
-    // ── Önbellek ──────────────────────────────────────────────────────────────
-    layout.addView(sectionTitle("Önbellek Yönetimi"))
-    layout.addView(TextView(ctx).apply {
-        text = "Modeller önbellekte saklanır, her yüklemede kopyalanmaz. Listeden kaldırılan modeller önbellekten de silinir."; textSize = 11f; alpha = 0.6f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
-    })
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 11: ÖNBELLEK YÖNETİMİ
+    // ═══════════════════════════════════════════════════════════════════════
+    val secCache = makeSectionCard(layout, "🗂️", "Önbellek Yönetimi")
+
     val cacheStatusLabel = TextView(ctx).apply {
         text = getCacheInfo(); textSize = 12f
-        setTextColor(0xFF9090C0.toInt())
+        setTextColor(if (isDark) 0xFF9090C0.toInt() else 0xFF6666AA.toInt())
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
     }
-    layout.addView(cacheStatusLabel)
+    secCache.addView(cacheStatusLabel)
     val clearCacheBtn = android.widget.Button(ctx).apply {
-        text = "🗑️ Önbelleği Temizle"
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+        text = "🗑️ Önbelleği Temizle"; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
     clearCacheBtn.setOnClickListener { clearUnusedModelCache(cacheStatusLabel) }
-    layout.addView(clearCacheBtn)
+    secCache.addView(clearCacheBtn)
+    secCache.addView(hintText("Listeden kaldırılan modeller önbellekten de silinir."))
 
-    // ── İptal / Kaydet butonları ──────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    // KAYDET / İPTAL
+    // ═══════════════════════════════════════════════════════════════════════
     val btnRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.END
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (12 * dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (16*dp).toInt() }
     }
     val btnIptal = android.widget.Button(ctx).apply {
-        text = "✖ İptal"
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = (8 * dp).toInt() }
+        text = "✖ İptal"; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = (8*dp).toInt() }
     }
-    val btnKaydet = android.widget.Button(ctx).apply { text = "✔ Kaydet" }
+    val btnKaydet = android.widget.Button(ctx).apply { text = "✔ Kaydet"; isAllCaps = false }
     btnRow.addView(btnIptal); btnRow.addView(btnKaydet); layout.addView(btnRow)
 
     val dialog = android.app.AlertDialog.Builder(this).setTitle("⚙️ Ayarlar").setView(scrollView).create()
@@ -950,8 +927,8 @@ internal fun MainActivity.showSettingsDialog() {
             rbFlashOn.isChecked  -> 2
             else                 -> 1
         }
-        useMmap           = mmapSwitch.isChecked
-        useMlock          = mlockSwitch.isChecked
+        useMmap             = mmapSwitch.isChecked
+        useMlock            = mlockSwitch.isChecked
         bypassContextLength = bypassSwitch.isChecked
         webSearchMode       = when {
             rbModeTrigger.isChecked -> "trigger"
@@ -972,25 +949,20 @@ internal fun MainActivity.showSettingsDialog() {
         webSearchResultCount = resultCountBar.progress + 1
         webPageFetchEnabled  = fetchSwitch.isChecked
         urlFetchEnabled      = urlFetchSwitch.isChecked
-        urlFetchCharLimit    = urlCharLimitEdit.text.toString().toIntOrNull()
-            ?.coerceIn(500, 50000) ?: 5000
+        urlFetchCharLimit    = urlCharLimitEdit.text.toString().toIntOrNull()?.coerceIn(500, 50000) ?: 5000
 
-        // ── Rapor modeli ayarlarını kaydet ──────────────────────────────────
         reportModelNoThink = reportNoThinkSwitch.isChecked
         val reportCtxVal = rCtxEdit.text.toString().toIntOrNull()?.coerceIn(2048, 32768) ?: 8192
         val reportCtxAligned = (reportCtxVal / 1024) * 1024
         val templateToSave = if (currentTemplateSelection == 0) -1 else currentTemplateSelection - 1
         getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit().apply {
-            if (reportModelEntry != null)
-                putString(DailyReportWorker.KEY_REPORT_MODEL_ENTRY, reportModelEntry)
-            else
-                remove(DailyReportWorker.KEY_REPORT_MODEL_ENTRY)
+            if (reportModelEntry != null) putString(DailyReportWorker.KEY_REPORT_MODEL_ENTRY, reportModelEntry)
+            else remove(DailyReportWorker.KEY_REPORT_MODEL_ENTRY)
             putInt(DailyReportWorker.KEY_REPORT_MODEL_TEMPLATE, templateToSave)
             putBoolean(DailyReportWorker.KEY_REPORT_MODEL_NO_THINK, reportModelNoThink)
             putInt("report_context_size", reportCtxAligned)
         }.apply()
 
-        // ── v5.8: Tema ayarını kaydet ve uygula ─────────────────────────────
         appThemeMode = when {
             rbThemeDark.isChecked  -> MainActivity.THEME_DARK
             rbThemeLight.isChecked -> MainActivity.THEME_LIGHT
