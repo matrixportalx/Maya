@@ -34,9 +34,7 @@ set(LLAMA_SRC ${CMAKE_CURRENT_LIST_DIR}/../../../../llama.cpp)
 add_subdirectory(${LLAMA_SRC} build-llama)
 
 # --------------------------------------------------------------------------
-# v4.8 Multimodal: libmtmd (tools/mtmd/ + alt klasörler)
-# GLOB_RECURSE ile tüm alt klasörler taranır.
-# main() içeren dosyalar ve mtmd-cli.cpp hariç tutulur.
+# v4.8 Multimodal: libmtmd (tools/mtmd/ + alt klasorler)
 # --------------------------------------------------------------------------
 set(MTMD_DIR ${LLAMA_SRC}/tools/mtmd)
 
@@ -55,16 +53,20 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
         GGML_OPENMP=$<BOOL:${GGML_OPENMP}>
 )
 
+# vendor/nlohmann/ icinde json_fwd.hpp dogrudan bulunuyor.
+# #include <nlohmann/json_fwd.hpp> icin vendor/ dizinini ekliyoruz.
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         ${LLAMA_SRC}
         ${LLAMA_SRC}/common
         ${LLAMA_SRC}/include
         ${LLAMA_SRC}/ggml/include
         ${LLAMA_SRC}/ggml/src
-        ${MTMD_DIR})
+        ${MTMD_DIR}
+        ${LLAMA_SRC}/vendor)
 
+# Bu llama.cpp surumunde common kutuphanesi "llama-common" olarak adlandirildi.
 target_link_libraries(${CMAKE_PROJECT_NAME}
         llama
-        common
+        llama-common
         android
         log)
