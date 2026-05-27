@@ -358,6 +358,8 @@ class MainActivity : AppCompatActivity() {
                 requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
             }
         }
+        // ── v5.9: Sessiz güncelleme kontrolü ─────────────────────────────────
+        checkForUpdateSilently()
     }
 
     override fun onNewIntent(intent: Intent) {
