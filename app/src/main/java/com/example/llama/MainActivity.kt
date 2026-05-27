@@ -219,6 +219,10 @@ class MainActivity : AppCompatActivity() {
     internal var selectedImagePath: String? = null
     internal var loadedMmprojPath: String? = null
 
+    // ── v5.9: Bekleyen güncelleme bilgisi ─────────────────────────────────────
+    internal var pendingUpdateInfo: AppUpdater.UpdateInfo? = null
+
+
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as MayaForegroundService.LocalBinder
