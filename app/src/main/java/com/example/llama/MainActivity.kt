@@ -383,8 +383,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.main_menu, menu); return true
-    }
+        menuInflater.inflate(R.menu.main_menu, menu)
+
+        // Bekleyen güncelleme varsa menü öğesini vurgula
+        val updateItem = menu.findItem(R.id.action_update)
+        if (pendingUpdateInfo != null) {
+            updateItem?.title = "🆕 Güncelleme Mevcut! (${pendingUpdateInfo!!.versionName})"
+        }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
@@ -396,6 +401,12 @@ class MainActivity : AppCompatActivity() {
             R.id.action_settings     -> { showSettingsDialog(); true }
             R.id.action_backup       -> { backupChats(); true }
             R.id.action_restore      -> { showRestorePicker(); true }
+            R.id.action_update       -> {
+                val pending = pendingUpdateInfo
+                if (pending != null) showUpdateDialog(pending)
+                else checkForUpdateNow()
+                true
+            }
             R.id.action_logs         -> { showLogsDialog(); true }
             else -> super.onOptionsItemSelected(item)
         }
