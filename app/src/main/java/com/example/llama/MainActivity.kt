@@ -391,6 +391,9 @@ class MainActivity : AppCompatActivity() {
             updateItem?.title = "🆕 Güncelleme Mevcut! (${pendingUpdateInfo!!.versionName})"
         }
 
+        return true
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_search       -> { showSearchOverlay(); true }
