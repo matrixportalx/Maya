@@ -39,6 +39,7 @@ import java.io.FileOutputStream
 // v5.4 - MainActivity refaktörü: 9 dosyaya bölündü (extension functions)
 // v5.5 - URL okuma: mesajdaki URL'leri otomatik çekip modele iletme
 // v5.8 - Tema desteği: Karanlık / Aydınlık / Sistem seçeneği
+// v5.9 - Uygulama içi güncelleme: GitHub Releases API
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -95,14 +96,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ── Tema sabitleri ──────────────────────────────────────────────────────
-        const val THEME_SYSTEM = 0   // Sistem temasını takip et
-        const val THEME_DARK   = 1   // Daima karanlık
-        const val THEME_LIGHT  = 2   // Daima aydınlık
+        const val THEME_SYSTEM = 0
+        const val THEME_DARK   = 1
+        const val THEME_LIGHT  = 2
 
-        /**
-         * Seçilen tema modunu AppCompatDelegate'e uygular.
-         * Activity yeniden oluşturulmadan hemen etkin olur.
-         */
         fun applyThemeMode(mode: Int) {
             val nightMode = when (mode) {
                 THEME_DARK  -> AppCompatDelegate.MODE_NIGHT_YES
@@ -155,19 +152,12 @@ class MainActivity : AppCompatActivity() {
     internal var topK: Int = 40
     internal var noThinking: Boolean = false
     internal var autoLoadLastModel: Boolean = false
-    /**
-     * Flash Attention modu:
-     *   0 → Kapalı
-     *   1 → Otomatik (varsayılan — model destekliyorsa açar, llama.cpp -fa auto)
-     *   2 → Açık (zorla)
-     */
-    internal var flashAttnMode: Int = 1  // Varsayılan: Otomatik
+    internal var flashAttnMode: Int = 1
     internal var useMmap: Boolean = true
     internal var useMlock: Boolean = false
     internal var bypassContextLength: Boolean = false
 
     // ── v5.8: Tema ayarı ──────────────────────────────────────────────────────
-    /** 0=Sistem, 1=Karanlık, 2=Aydınlık */
     internal var appThemeMode: Int = THEME_SYSTEM
 
     // ── v5.1: İnternet araması ────────────────────────────────────────────────
@@ -218,6 +208,9 @@ class MainActivity : AppCompatActivity() {
     // ── v4.8: Vision (multimodal) state ──────────────────────────────────────
     internal var selectedImagePath: String? = null
     internal var loadedMmprojPath: String? = null
+
+    // ── v5.9: Bekleyen güncelleme bilgisi ─────────────────────────────────────
+    internal var pendingUpdateInfo: AppUpdater.UpdateInfo? = null
 
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -309,7 +302,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Tema, setContentView'dan ÖNCE uygulanmalı
         val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         appThemeMode = prefs.getInt("app_theme_mode", THEME_SYSTEM)
         applyThemeMode(appThemeMode)
@@ -319,6 +311,12 @@ class MainActivity : AppCompatActivity() {
 
         db = AppDatabase.getInstance(this)
         engine = InferenceEngineImpl.getInstance(this)
+
+        // versionName'i prefs'e kaydet (AppUpdater için)
+        val currentVersionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+        } catch (_: Exception) { "1.0.0" }
+        prefs.edit().putString("app_version_name", currentVersionName).apply()
 
         loadSettings()
         migrateModelsFromCacheToFilesDir()
@@ -354,6 +352,9 @@ class MainActivity : AppCompatActivity() {
                 requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 100)
             }
         }
+
+        // ── v5.9: Sessiz güncelleme kontrolü ─────────────────────────────────
+        checkForUpdateSilently()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -377,7 +378,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menuInflater.inflate(R.menu.main_menu, menu); return true
+        menuInflater.inflate(R.menu.main_menu, menu)
+
+        // Bekleyen güncelleme varsa menü öğesini vurgula
+        val updateItem = menu.findItem(R.id.action_update)
+        if (pendingUpdateInfo != null) {
+            updateItem?.title = "🆕 Güncelleme Mevcut! (${pendingUpdateInfo!!.versionName})"
+        }
+
+        return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -390,6 +399,12 @@ class MainActivity : AppCompatActivity() {
             R.id.action_settings     -> { showSettingsDialog(); true }
             R.id.action_backup       -> { backupChats(); true }
             R.id.action_restore      -> { showRestorePicker(); true }
+            R.id.action_update       -> {
+                val pending = pendingUpdateInfo
+                if (pending != null) showUpdateDialog(pending)
+                else checkForUpdateNow()
+                true
+            }
             R.id.action_logs         -> { showLogsDialog(); true }
             else -> super.onOptionsItemSelected(item)
         }
