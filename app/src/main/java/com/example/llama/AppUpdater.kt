@@ -33,7 +33,7 @@ object AppUpdater {
     // ───────────────────────────────────────────────────────────────────────
 
     private const val API_URL =
-        "https://github.com/matrixportalx/Maya/releases/tag/v1.1.1"
+        "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
     data class UpdateInfo(
         val tagName: String,        // "v1.2.0"
