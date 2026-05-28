@@ -156,48 +156,29 @@ internal fun MainActivity.updateActiveModelSubtitle() {
 
 // ── Güncelleme kontrolü ───────────────────────────────────────────────────────
 
-/**
- * Uygulama açılışında sessizce güncelleme kontrolü yapar.
- * Güncelleme varsa toolbar başlığına "🆕" rozeti ekler ve
- * menüde "Güncelleme mevcut" olarak gösterir.
- */
 internal fun MainActivity.checkForUpdateSilently() {
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
-
-    // Günde en fazla bir kez kontrol et (pil/veri tasarrufu)
     val lastCheck = prefs.getLong("last_update_check", 0L)
-    val now       = System.currentTimeMillis()
-    if (now - lastCheck < 24 * 60 * 60 * 1000L) return   // 24 saat geçmedi
+    val now = System.currentTimeMillis()
+    if (now - lastCheck < 24 * 60 * 60 * 1000L) return
 
     prefs.edit().putLong("last_update_check", now).apply()
 
     lifecycleScope.launch {
         AppUpdater.checkForUpdate(
             context        = this@checkForUpdateSilently,
-            currentVersion = android.os.Build.VERSION.SDK_INT.let {
-                // BuildConfig yerine versionName doğrudan prefs'e yazılır ilk açılışta
-                prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
-            }
+            currentVersion = prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
         ) { info ->
             if (info != null) {
                 pendingUpdateInfo = info
-                // Toolbar'a küçük rozet ekle
                 supportActionBar?.title = "Maya 🆕"
-                invalidateOptionsMenu()  // menüyü güncelle
-                // ESKİ — HATALI:
-                log("Updater", "Güncelleme mevcut: ${info.versionName}")
-
-                // YENİ — DOĞRU:
+                invalidateOptionsMenu()
                 MainActivity.log("Updater", "Güncelleme mevcut: ${info.versionName}")
             }
         }
     }
 }
 
-/**
- * Menüden veya ayarlardan "Güncelleme Kontrol Et" seçildiğinde.
- * Her zaman kontrol eder (24 saat sınırını atlar).
- */
 internal fun MainActivity.checkForUpdateNow() {
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     lifecycleScope.launch {
@@ -206,7 +187,7 @@ internal fun MainActivity.checkForUpdateNow() {
             context        = this@checkForUpdateNow,
             currentVersion = prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
         ) { info ->
-            updateActiveModelSubtitle()   // subtitle'ı geri yükle
+            updateActiveModelSubtitle()
             if (info != null) {
                 pendingUpdateInfo = info
                 invalidateOptionsMenu()
@@ -222,11 +203,6 @@ internal fun MainActivity.checkForUpdateNow() {
     }
 }
 
-/**
- * Güncelleme diyaloğunu gösterir.
- * Bekleyen güncelleme varsa (pendingUpdateInfo != null) bilgi gösterir,
- * kullanıcı onaylarsa indirme başlar.
- */
 internal fun MainActivity.showUpdateDialog(info: AppUpdater.UpdateInfo) {
     val sizeStr = AppUpdater.formatSize(info.apkSize)
     val msg = buildString {
@@ -248,12 +224,13 @@ internal fun MainActivity.showUpdateDialog(info: AppUpdater.UpdateInfo) {
         .show()
 }
 
-/** PackageManager'dan mevcut versionName'i okur */
 internal fun MainActivity.getVersionName(): String {
     return try {
         packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
     } catch (_: Exception) { "1.0.0" }
 }
+
+// ── Sohbet yeniden adlandır / sil ─────────────────────────────────────────────
 
 internal fun MainActivity.showRenameConversationDialog(conv: Conversation) {
     val input = EditText(this).apply {
