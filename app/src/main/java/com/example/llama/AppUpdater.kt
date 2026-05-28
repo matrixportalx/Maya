@@ -1,53 +1,44 @@
 package tr.maya
 
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.widget.Toast
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-/**
- * GitHub Releases API üzerinden güncelleme kontrolü ve APK indirme/kurma.
- *
- * Kullanım:
- *   AppUpdater.checkForUpdate(context, currentVersionName) { info ->
- *       if (info != null) { /* güncelleme var, info.show() */ }
- *   }
- */
 object AppUpdater {
 
-    // ── Kendi repo adresinizi buraya yazın ──────────────────────────────────
-    private const val GITHUB_OWNER = "matrixportalx"   // GitHub kullanıcı adı
-    private const val GITHUB_REPO  = "Maya"            // Repo adı
-    // ───────────────────────────────────────────────────────────────────────
-
+    private const val GITHUB_OWNER = "matrixportalx"
+    private const val GITHUB_REPO  = "Maya"
     private const val API_URL =
         "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
+    private const val NOTIF_CHANNEL = "maya_update"
+    private const val NOTIF_ID      = 9001
+
     data class UpdateInfo(
-        val tagName: String,        // "v1.2.0"
-        val versionName: String,    // "1.2.0"
+        val tagName: String,
+        val versionName: String,
         val releaseNotes: String,
         val apkUrl: String,
-        val apkSize: Long           // bytes, 0 ise bilinmiyor
+        val apkSize: Long
     )
 
-    /**
-     * Arka planda güncelleme kontrolü yapar.
-     * [currentVersion]: BuildConfig.VERSION_NAME ("1.1.1" gibi)
-     * [onResult]: Main thread'de çağrılır. Güncelleme yoksa null döner.
-     */
+    // ── Güncelleme kontrolü ───────────────────────────────────────────────────
+
     suspend fun checkForUpdate(
         context: Context,
         currentVersion: String,
@@ -59,7 +50,7 @@ object AppUpdater {
                 conn.requestMethod = "GET"
                 conn.setRequestProperty("Accept", "application/vnd.github+json")
                 conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
-                conn.setRequestProperty("User-Agent", "Maya-Android-App")
+                conn.setRequestProperty("User-Agent", "Maya/1.0")
                 conn.connectTimeout = 10_000
                 conn.readTimeout    = 10_000
 
@@ -71,11 +62,10 @@ object AppUpdater {
                 val json = JSONObject(conn.inputStream.bufferedReader().readText())
                 conn.disconnect()
 
-                val tagName = json.optString("tag_name", "")      // "v1.2.0"
-                val body    = json.optString("body", "")           // release notları
+                val tagName = json.optString("tag_name", "")
+                val body    = json.optString("body", "")
                 val assets  = json.optJSONArray("assets")
 
-                // APK asset'ini bul
                 var apkUrl  = ""
                 var apkSize = 0L
                 if (assets != null) {
@@ -95,11 +85,9 @@ object AppUpdater {
                     return@withContext null
                 }
 
-                // "v1.2.0" → "1.2.0"
                 val remoteVersion = tagName.trimStart('v', 'V')
-
                 if (!isNewerVersion(remoteVersion, currentVersion)) {
-                    MainActivity.log("Updater", "Uygulama güncel: $currentVersion == $remoteVersion")
+                    MainActivity.log("Updater", "Uygulama güncel: $currentVersion")
                     return@withContext null
                 }
 
@@ -116,117 +104,178 @@ object AppUpdater {
                 null
             }
         }
-
         withContext(Dispatchers.Main) { onResult(info) }
     }
 
-    /**
-     * DownloadManager ile APK'yı indirir ve ardından kurulum ekranını açar.
-     */
-    fun downloadAndInstall(context: Context, info: UpdateInfo) {
-        try {
-            val fileName = "Maya-${info.versionName}.apk"
+    // ── İndirme + Kurulum (DownloadManager YOK, Maya kendi indiriyor) ─────────
 
-            // İndirilmiş eski APK varsa sil
-            val oldFile = File(
-                context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                fileName
-            )
-            if (oldFile.exists()) oldFile.delete()
+    suspend fun downloadAndInstall(context: Context, info: UpdateInfo) {
+        val fileName = "Maya-${info.versionName}.apk"
+        val destFile = File(
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+            fileName
+        )
 
-            val request = DownloadManager.Request(Uri.parse(info.apkUrl)).apply {
-                setTitle("Maya ${info.versionName} indiriliyor")
-                setDescription("Güncelleme hazırlanıyor…")
-                setNotificationVisibility(
-                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-                )
-                setDestinationInExternalFilesDir(
+        // Kurulum izni kontrolü — yoksa ayarlara yönlendir, indirme başlatma
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!context.packageManager.canRequestPackageInstalls()) {
+                val intent = Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                context.startActivity(intent)
+                Toast.makeText(
                     context,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    fileName
-                )
-                setMimeType("application/vnd.android.package-archive")
+                    "Maya için kurulum iznini açın, ardından tekrar deneyin.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
             }
+        }
 
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val downloadId = dm.enqueue(request)
+        // APK zaten varsa tekrar indirme
+        if (destFile.exists() && destFile.length() > 10_000_000L) {
+            MainActivity.log("Updater", "APK önbellekte, kurulum başlatılıyor")
+            installApk(context, destFile)
+            return
+        }
 
-            MainActivity.log("Updater", "İndirme başladı: downloadId=$downloadId")
-            Toast.makeText(
-                context,
-                "Maya ${info.versionName} indiriliyor… Bildirim alanını takip edin.",
-                Toast.LENGTH_LONG
-            ).show()
+        if (destFile.exists()) destFile.delete()
 
-            // İndirme tamamlandığında kurulum başlat
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context, intent: Intent) {
-                    val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                    if (id != downloadId) return
+        createNotifChannel(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-                    ctx.unregisterReceiver(this)
+        // İndirme progress bildirimi
+        fun notif(progress: Int, done: Boolean = false) {
+            val title = if (done) "Maya ${info.versionName} indirildi" else "Maya ${info.versionName} indiriliyor"
+            val text  = if (done) "Kurulum başlatılıyor…" else "%$progress"
+            val nb = NotificationCompat.Builder(context, NOTIF_CHANNEL)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setOngoing(!done)
+                .setSilent(true)
+            if (!done) {
+                nb.setProgress(100, progress, progress == 0)
+            }
+            nm.notify(NOTIF_ID, nb.build())
+        }
 
-                    val query  = DownloadManager.Query().setFilterById(downloadId)
-                    val cursor = dm.query(query)
-                    if (cursor != null && cursor.moveToFirst()) {
-                        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                        val status    = if (statusIdx >= 0) cursor.getInt(statusIdx)
-                                        else DownloadManager.STATUS_FAILED
-                        cursor.close()
+        withContext(Dispatchers.IO) {
+            try {
+                notif(0)
+                MainActivity.log("Updater", "İndirme başlıyor: ${info.apkUrl}")
 
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            val apkFile = File(
-                                ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                                fileName
-                            )
-                            installApk(ctx, apkFile)
-                        } else {
-                            Toast.makeText(ctx, "İndirme başarısız oldu.", Toast.LENGTH_LONG).show()
-                            MainActivity.log("Updater", "İndirme başarısız: status=$status")
+                val conn = URL(info.apkUrl).openConnection() as HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.setRequestProperty("User-Agent", "Maya/1.0")
+                conn.connectTimeout = 15_000
+                conn.readTimeout    = 60_000
+                conn.instanceFollowRedirects = true
+
+                // GitHub redirect'lerini takip et
+                var finalConn = conn
+                var redirects = 0
+                while (finalConn.responseCode in 301..308 && redirects < 5) {
+                    val location = finalConn.getHeaderField("Location") ?: break
+                    finalConn.disconnect()
+                    finalConn = URL(location).openConnection() as HttpURLConnection
+                    finalConn.requestMethod = "GET"
+                    finalConn.setRequestProperty("User-Agent", "Maya/1.0")
+                    finalConn.connectTimeout = 15_000
+                    finalConn.readTimeout    = 60_000
+                    redirects++
+                }
+
+                val totalBytes = finalConn.contentLengthLong
+                    .takeIf { it > 0 } ?: info.apkSize.takeIf { it > 0 } ?: -1L
+
+                finalConn.inputStream.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        val buf = ByteArray(128 * 1024)  // 128 KB chunk
+                        var downloaded = 0L
+                        var lastNotifPct = -1
+                        var n: Int
+                        while (input.read(buf).also { n = it } != -1) {
+                            output.write(buf, 0, n)
+                            downloaded += n
+                            if (totalBytes > 0) {
+                                val pct = (downloaded * 100 / totalBytes).toInt()
+                                if (pct != lastNotifPct && pct % 5 == 0) {
+                                    lastNotifPct = pct
+                                    withContext(Dispatchers.Main) { notif(pct) }
+                                }
+                            }
                         }
                     }
                 }
-            }
+                finalConn.disconnect()
 
-            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(receiver, filter)
-            }
+                MainActivity.log("Updater", "İndirme tamamlandı: ${destFile.length()} bytes")
 
-        } catch (e: Exception) {
-            Toast.makeText(context, "İndirme hatası: ${e.message}", Toast.LENGTH_LONG).show()
-            MainActivity.log("Updater", "downloadAndInstall hatası: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    notif(100, done = true)
+                    nm.cancel(NOTIF_ID)
+                    installApk(context, destFile)
+                }
+
+            } catch (e: Exception) {
+                destFile.delete()
+                MainActivity.log("Updater", "İndirme hatası: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    nm.cancel(NOTIF_ID)
+                    Toast.makeText(context, "İndirme hatası: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
-    private fun installApk(context: Context, apkFile: File) {
+    // ── APK Kurulum ───────────────────────────────────────────────────────────
+
+    fun installApk(context: Context, apkFile: File) {
         try {
+            if (!apkFile.exists()) {
+                Toast.makeText(context, "APK bulunamadı.", Toast.LENGTH_LONG).show()
+                return
+            }
+
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.provider",
                 apkFile
             )
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
+
+            val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                data = uri
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_GRANT_READ_URI_PERMISSION
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+                putExtra(Intent.EXTRA_RETURN_RESULT, false)
             }
+
             context.startActivity(intent)
-            MainActivity.log("Updater", "Kurulum başlatıldı: ${apkFile.absolutePath}")
+            MainActivity.log("Updater", "Kurulum ekranı açıldı: ${apkFile.name}")
+
         } catch (e: Exception) {
             Toast.makeText(context, "Kurulum başlatılamadı: ${e.message}", Toast.LENGTH_LONG).show()
             MainActivity.log("Updater", "installApk hatası: ${e.message}")
         }
     }
 
-    /**
-     * Basit semantik versiyon karşılaştırması: "1.2.0" > "1.1.1" → true
-     * Her iki string de "major.minor.patch" formatında beklenir.
-     * Farklı format varsa string karşılaştırmasına düşer.
-     */
+    // ── Yardımcılar ───────────────────────────────────────────────────────────
+
+    private fun createNotifChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(
+                NOTIF_CHANNEL,
+                "Maya Güncelleme",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply { setShowBadge(false) }
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(ch)
+        }
+    }
+
     private fun isNewerVersion(remote: String, current: String): Boolean {
         return try {
             val r = remote.split(".").map { it.toInt() }
@@ -238,15 +287,12 @@ object AppUpdater {
                 if (rv > cv) return true
                 if (rv < cv) return false
             }
-            false   // eşit
+            false
         } catch (_: Exception) {
-            remote > current   // sayısal parse başarısız → string karşılaştır
+            remote > current
         }
     }
 
-    /**
-     * MB olarak formatlar.
-     */
     fun formatSize(bytes: Long): String {
         if (bytes <= 0) return ""
         val mb = bytes / (1024.0 * 1024.0)
