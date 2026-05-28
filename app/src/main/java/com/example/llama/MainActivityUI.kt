@@ -184,7 +184,11 @@ internal fun MainActivity.checkForUpdateSilently() {
                 // Toolbar'a küçük rozet ekle
                 supportActionBar?.title = "Maya 🆕"
                 invalidateOptionsMenu()  // menüyü güncelle
+                // ESKİ — HATALI:
                 log("Updater", "Güncelleme mevcut: ${info.versionName}")
+
+                // YENİ — DOĞRU:
+                MainActivity.log("Updater", "Güncelleme mevcut: ${info.versionName}")
             }
         }
     }
