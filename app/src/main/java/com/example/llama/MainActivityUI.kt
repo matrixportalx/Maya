@@ -218,7 +218,9 @@ internal fun MainActivity.showUpdateDialog(info: AppUpdater.UpdateInfo) {
         .setTitle("🆕 Güncelleme Mevcut")
         .setMessage(msg)
         .setPositiveButton("İndir ve Kur") { _, _ ->
-            AppUpdater.downloadAndInstall(this, info)
+            lifecycleScope.launch {
+                AppUpdater.downloadAndInstall(this@showUpdateDialog, info)
+            }
         }
         .setNegativeButton("Sonra", null)
         .show()
