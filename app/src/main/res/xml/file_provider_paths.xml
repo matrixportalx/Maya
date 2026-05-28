@@ -2,5 +2,17 @@
 <paths>
     <external-files-path
         name="downloads"
+        path="." />
+    <external-files-path
+        name="downloads_sub"
         path="Downloads/" />
+    <files-path
+        name="internal_downloads"
+        path="Downloads/" />
+    <cache-path
+        name="cache"
+        path="." />
+    <external-cache-path
+        name="external_cache"
+        path="." />
 </paths>
