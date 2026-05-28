@@ -59,6 +59,7 @@ object AppUpdater {
                 conn.requestMethod = "GET"
                 conn.setRequestProperty("Accept", "application/vnd.github+json")
                 conn.setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+                conn.setRequestProperty("User-Agent", "Maya-Android-App")
                 conn.connectTimeout = 10_000
                 conn.readTimeout    = 10_000
 
