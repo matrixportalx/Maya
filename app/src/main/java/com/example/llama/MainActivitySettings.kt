@@ -1,7 +1,9 @@
 package tr.maya
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -10,6 +12,13 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 
 // ── Ayar yükleme / kaydetme ───────────────────────────────────────────────────
 
@@ -111,11 +120,6 @@ internal fun MainActivity.saveSettings() {
 
 // ── Yardımcı: Bölüm kartı ─────────────────────────────────────────────────────
 
-/**
- * Ayarlar diyaloğundaki her kategoriyi görsel olarak ayıran kart yapısı.
- * Üstte emoji + başlık bandı, altında içerik alanı.
- * Dönen Pair: (kart LinearLayout, içerik LinearLayout)
- */
 private fun MainActivity.makeSectionCard(
     parent: LinearLayout,
     emoji: String,
@@ -124,7 +128,6 @@ private fun MainActivity.makeSectionCard(
     val dp = resources.displayMetrics.density
     val isDark = MessageAdapter.isDarkTheme(this)
 
-    // Dış kart — hafif köşe yuvarlaklığı ve border
     val card = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(
@@ -142,19 +145,17 @@ private fun MainActivity.makeSectionCard(
         }
     }
 
-    // Başlık bandı
     val header = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = android.view.Gravity.CENTER_VERTICAL
         setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
         background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            // Sadece üst köşeler yuvarlak
             cornerRadii = floatArrayOf(
-                10*dp, 10*dp,  // üst-sol
-                10*dp, 10*dp,  // üst-sağ
-                0f, 0f,         // alt-sağ
-                0f, 0f          // alt-sol
+                10*dp, 10*dp,
+                10*dp, 10*dp,
+                0f, 0f,
+                0f, 0f
             )
             setColor(if (isDark) 0xFF252540.toInt() else 0xFFEAEAFF.toInt())
         }
@@ -179,7 +180,6 @@ private fun MainActivity.makeSectionCard(
     header.addView(emojiTv)
     header.addView(titleTv)
 
-    // Ayırıcı çizgi
     val divider = android.view.View(this).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
@@ -187,7 +187,6 @@ private fun MainActivity.makeSectionCard(
         setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
     }
 
-    // İçerik alanı
     val content = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (12 * dp).toInt())
@@ -201,7 +200,6 @@ private fun MainActivity.makeSectionCard(
     return content
 }
 
-/** Kart içinde küçük alt başlık (bold, biraz soluk) */
 private fun MainActivity.subLabel(text: String): TextView {
     val dp = resources.displayMetrics.density
     val isDark = MessageAdapter.isDarkTheme(this)
@@ -217,7 +215,6 @@ private fun MainActivity.subLabel(text: String): TextView {
     }
 }
 
-/** Açıklama metni — küçük, soluk */
 private fun MainActivity.hintText(text: String): TextView {
     val dp = resources.displayMetrics.density
     return TextView(this).apply {
@@ -229,6 +226,264 @@ private fun MainActivity.hintText(text: String): TextView {
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = (2 * dp).toInt(); bottomMargin = (6 * dp).toInt() }
     }
+}
+
+// ── GitHub'dan geliştirici bilgisi çek ───────────────────────────────────────
+
+private data class GitHubUserInfo(
+    val login: String,
+    val name: String?,
+    val bio: String?,
+    val publicRepos: Int,
+    val followers: Int,
+    val avatarUrl: String
+)
+
+private suspend fun fetchGitHubUserInfo(username: String): GitHubUserInfo? =
+    withContext(Dispatchers.IO) {
+        try {
+            val conn = URL("https://api.github.com/users/$username").openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            conn.setRequestProperty("User-Agent", "Maya/1.0")
+            conn.connectTimeout = 8_000
+            conn.readTimeout    = 8_000
+            if (conn.responseCode != HttpURLConnection.HTTP_OK) return@withContext null
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            conn.disconnect()
+            GitHubUserInfo(
+                login       = json.optString("login", username),
+                name        = json.optString("name").ifEmpty { null },
+                bio         = json.optString("bio").ifEmpty { null },
+                publicRepos = json.optInt("public_repos", 0),
+                followers   = json.optInt("followers", 0),
+                avatarUrl   = json.optString("avatar_url", "")
+            )
+        } catch (_: Exception) { null }
+    }
+
+// ── Hakkında bölümü ───────────────────────────────────────────────────────────
+
+private fun MainActivity.addAboutSection(parent: LinearLayout) {
+    val dp      = resources.displayMetrics.density
+    val isDark  = MessageAdapter.isDarkTheme(this)
+    val version = getVersionName()
+    val ghOwner = AppUpdater.GITHUB_OWNER
+    val ghRepo  = AppUpdater.GITHUB_REPO
+
+    // ── Dış kart ──────────────────────────────────────────────────────────────
+    val card = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (12 * dp).toInt(); bottomMargin = (2 * dp).toInt() }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = (10 * dp)
+            setColor(if (isDark) 0xFF1C1C2E.toInt() else 0xFFF5F5FF.toInt())
+            setStroke((1 * dp).toInt(), if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
+        }
+    }
+
+    // ── Başlık bandı ──────────────────────────────────────────────────────────
+    val header = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        setPadding((12 * dp).toInt(), (10 * dp).toInt(), (12 * dp).toInt(), (10 * dp).toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadii = floatArrayOf(10*dp, 10*dp, 10*dp, 10*dp, 0f, 0f, 0f, 0f)
+            setColor(if (isDark) 0xFF252540.toInt() else 0xFFEAEAFF.toInt())
+        }
+    }
+    header.addView(TextView(this).apply {
+        text = "ℹ️"
+        textSize = 16f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = (8 * dp).toInt() }
+    })
+    header.addView(TextView(this).apply {
+        text = "Hakkında"
+        textSize = 13f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFCCCCFF.toInt() else 0xFF3333AA.toInt())
+    })
+
+    val divider = android.view.View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt())
+        setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
+    }
+
+    // ── İçerik alanı ──────────────────────────────────────────────────────────
+    val content = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((16 * dp).toInt(), (14 * dp).toInt(), (16 * dp).toInt(), (14 * dp).toInt())
+    }
+
+    // Uygulama adı + versiyon
+    val appRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+    }
+    appRow.addView(TextView(this).apply {
+        text = "👩‍🦰"
+        textSize = 28f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = (12 * dp).toInt() }
+    })
+    val appInfoCol = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    appInfoCol.addView(TextView(this).apply {
+        text = "Maya"
+        textSize = 18f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFEEEEFF.toInt() else 0xFF1A1A2E.toInt())
+    })
+    appInfoCol.addView(TextView(this).apply {
+        text = "v$version"
+        textSize = 12f
+        setTextColor(if (isDark) 0xFF9090B0.toInt() else 0xFF6666AA.toInt())
+    })
+    appRow.addView(appInfoCol)
+    content.addView(appRow)
+
+    // Açıklama
+    val descTv = TextView(this).apply {
+        text = "Tamamen çevrimdışı, llama.cpp tabanlı yerel LLM sohbet uygulaması. Hiçbir veri buluta gönderilmez."
+        textSize = 12f
+        setTextColor(if (isDark) 0xFFAAAAAA.toInt() else 0xFF666688.toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (12 * dp).toInt() }
+    }
+    content.addView(descTv)
+
+    // İnce ayırıcı
+    content.addView(android.view.View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
+        ).apply { bottomMargin = (12 * dp).toInt() }
+        setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFDDDDEE.toInt())
+    })
+
+    // Geliştirici satırı — GitHub'dan dinamik doldurulacak
+    val devRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (8 * dp).toInt() }
+    }
+    val devAvatar = TextView(this).apply {
+        text = "👤"
+        textSize = 20f
+        gravity = android.view.Gravity.CENTER
+        layoutParams = LinearLayout.LayoutParams(
+            (36 * dp).toInt(), (36 * dp).toInt()
+        ).apply { marginEnd = (10 * dp).toInt() }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFE0E0F0.toInt())
+        }
+    }
+    val devInfo = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    val devNameTv = TextView(this).apply {
+        text = ghOwner
+        textSize = 13f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFDDDDFF.toInt() else 0xFF2222AA.toInt())
+    }
+    val devBioTv = TextView(this).apply {
+        text = "Yükleniyor…"
+        textSize = 11f
+        setTextColor(if (isDark) 0xFF8888AA.toInt() else 0xFF8888AA.toInt())
+    }
+    devInfo.addView(devNameTv)
+    devInfo.addView(devBioTv)
+    devRow.addView(devAvatar)
+    devRow.addView(devInfo)
+    content.addView(devRow)
+
+    // GitHub'dan bilgi yükle (async)
+    lifecycleScope.launch {
+        val info = fetchGitHubUserInfo(ghOwner)
+        if (info != null) {
+            devNameTv.text = info.name?.let { "$it (@${info.login})" } ?: "@${info.login}"
+            devBioTv.text  = info.bio ?: "${info.publicRepos} repo  •  ${info.followers} takipçi"
+        } else {
+            devBioTv.text = "github.com/$ghOwner"
+        }
+    }
+
+    // Buton satırı: GitHub Profil + Repo
+    val btnRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (10 * dp).toInt() }
+    }
+
+    fun linkBtn(label: String, url: String) = TextView(this).apply {
+        text = label
+        textSize = 12f
+        gravity = android.view.Gravity.CENTER
+        setTextColor(if (isDark) 0xFFAABBFF.toInt() else 0xFF2244CC.toInt())
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = (20 * dp)
+            setColor(if (isDark) 0xFF1E1E3A.toInt() else 0xFFE8E8FF.toInt())
+            setStroke((1 * dp).toInt(), if (isDark) 0xFF3A3A6A.toInt() else 0xFFBBBBDD.toInt())
+        }
+        setPadding((14 * dp).toInt(), (8 * dp).toInt(), (14 * dp).toInt(), (8 * dp).toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { marginEnd = (8 * dp).toInt() }
+        isClickable = true
+        isFocusable = true
+        setOnClickListener {
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+            catch (_: Exception) { Toast.makeText(this@addAboutSection, "Açılamadı", Toast.LENGTH_SHORT).show() }
+        }
+    }
+
+    btnRow.addView(linkBtn("🐙  GitHub Profili", "https://github.com/$ghOwner"))
+    btnRow.addView(linkBtn("📦  Repo", "https://github.com/$ghOwner/$ghRepo"))
+    content.addView(btnRow)
+
+    // İnce ayırıcı
+    content.addView(android.view.View(this).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
+        ).apply { bottomMargin = (10 * dp).toInt() }
+        setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFDDDDEE.toInt())
+    })
+
+    // Lisans + sorumluluk reddi
+    val legalTv = TextView(this).apply {
+        text = "⚖️  MIT Lisansı  •  Tamamen çevrimdışı\nYapay zeka çıktıları geliştiricinin görüşlerini yansıtmaz. Kendi sorumluluğunuzda kullanın."
+        textSize = 10f
+        setTextColor(if (isDark) 0xFF666688.toInt() else 0xFF9999AA.toInt())
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+    }
+    content.addView(legalTv)
+
+    card.addView(header)
+    card.addView(divider)
+    card.addView(content)
+    parent.addView(card)
 }
 
 // ── Ayarlar diyaloğu ──────────────────────────────────────────────────────────
@@ -894,6 +1149,11 @@ internal fun MainActivity.showSettingsDialog() {
     clearCacheBtn.setOnClickListener { clearUnusedModelCache(cacheStatusLabel) }
     secCache.addView(clearCacheBtn)
     secCache.addView(hintText("Listeden kaldırılan modeller önbellekten de silinir."))
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 12: HAKKINDA
+    // ═══════════════════════════════════════════════════════════════════════
+    addAboutSection(layout)
 
     // ═══════════════════════════════════════════════════════════════════════
     // KAYDET / İPTAL
