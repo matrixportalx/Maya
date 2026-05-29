@@ -228,25 +228,13 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- Sohbet listesi -->
+        <!-- Sohbet listesi — ağırlıklı olarak kalan alanı kaplar -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/conversations_list"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:divider="@null" />
-
-        <!-- Alt imza -->
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Maya v1.1.2 • matrixportalx ❤️"
-            android:textColor="?attr/colorOnSurface"
-            android:textSize="11sp"
-            android:alpha="0.45"
-            android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="12dp" />
 
     </LinearLayout>
 
