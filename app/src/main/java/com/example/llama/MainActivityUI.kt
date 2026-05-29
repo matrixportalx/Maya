@@ -31,7 +31,6 @@ internal fun MainActivity.bindViews() {
     btnNewChat      = findViewById(R.id.btn_new_chat)
     charactersRv    = findViewById(R.id.characters_list)
     btnAddCharacter = findViewById(R.id.btn_add_character)
-    // v4.8: vision bileşenleri
     imagePreviewContainer = findViewById(R.id.image_preview_container)
     imagePreviewView      = findViewById(R.id.image_preview)
     imagePreviewLabel     = findViewById(R.id.image_preview_label)
@@ -88,7 +87,6 @@ internal fun MainActivity.setupMessageList() {
                 }
             }
         }
-        // onScrolled KASITLI BOŞ BIRAKILDI.
         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) { }
     })
 }
@@ -155,6 +153,86 @@ internal fun MainActivity.updateActiveModelSubtitle() {
     }
     supportActionBar?.subtitle = "$charStr$modelName$visionStr$searchStr"
 }
+
+// ── Güncelleme kontrolü ───────────────────────────────────────────────────────
+
+internal fun MainActivity.checkForUpdateSilently() {
+    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    val lastCheck = prefs.getLong("last_update_check", 0L)
+    val now = System.currentTimeMillis()
+    if (now - lastCheck < 24 * 60 * 60 * 1000L) return
+
+    prefs.edit().putLong("last_update_check", now).apply()
+
+    lifecycleScope.launch {
+        AppUpdater.checkForUpdate(
+            context        = this@checkForUpdateSilently,
+            currentVersion = prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
+        ) { info ->
+            if (info != null) {
+                pendingUpdateInfo = info
+                supportActionBar?.title = "Maya 🆕"
+                invalidateOptionsMenu()
+                MainActivity.log("Updater", "Güncelleme mevcut: ${info.versionName}")
+            }
+        }
+    }
+}
+
+internal fun MainActivity.checkForUpdateNow() {
+    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    lifecycleScope.launch {
+        supportActionBar?.subtitle = "🔍 Güncelleme kontrol ediliyor…"
+        AppUpdater.checkForUpdate(
+            context        = this@checkForUpdateNow,
+            currentVersion = prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
+        ) { info ->
+            updateActiveModelSubtitle()
+            if (info != null) {
+                pendingUpdateInfo = info
+                invalidateOptionsMenu()
+                showUpdateDialog(info)
+            } else {
+                Toast.makeText(
+                    this@checkForUpdateNow,
+                    "✅ Uygulama güncel (${getVersionName()})",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+}
+
+internal fun MainActivity.showUpdateDialog(info: AppUpdater.UpdateInfo) {
+    val sizeStr = AppUpdater.formatSize(info.apkSize)
+    val msg = buildString {
+        appendLine("Yeni sürüm: ${info.versionName}$sizeStr")
+        appendLine("Mevcut sürüm: ${getVersionName()}")
+        if (info.releaseNotes.isNotEmpty()) {
+            appendLine()
+            appendLine("📝 Sürüm notları:")
+            appendLine(info.releaseNotes)
+        }
+    }
+    android.app.AlertDialog.Builder(this)
+        .setTitle("🆕 Güncelleme Mevcut")
+        .setMessage(msg)
+        .setPositiveButton("İndir ve Kur") { _, _ ->
+            lifecycleScope.launch {
+                AppUpdater.downloadAndInstall(this@showUpdateDialog, info)
+            }
+        }
+        .setNegativeButton("Sonra", null)
+        .show()
+}
+
+internal fun MainActivity.getVersionName(): String {
+    return try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0.0"
+    } catch (_: Exception) { "1.0.0" }
+}
+
+// ── Sohbet yeniden adlandır / sil ─────────────────────────────────────────────
 
 internal fun MainActivity.showRenameConversationDialog(conv: Conversation) {
     val input = EditText(this).apply {

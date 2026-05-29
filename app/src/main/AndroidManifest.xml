@@ -12,6 +12,8 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- APK kurulumu için -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -33,6 +35,17 @@
                 android:value="androidx.startup" />
         </provider>
 
+        <!-- APK kurulumu için FileProvider -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_provider_paths" />
+        </provider>
+
         <activity
             android:name=".MainActivity"
             android:launchMode="singleTop"
@@ -50,19 +63,16 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
-        <!-- WorkManager foreground worker — tools:replace ile foregroundServiceType zorla eziliyor -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge"
             tools:replace="android:foregroundServiceType" />
 
-        <!-- Günlük rapor alarm alıcısı -->
         <receiver
             android:name=".DailyReportAlarmReceiver"
             android:exported="false">
             <intent-filter>
-                <!-- Telefon yeniden başladığında alarmı yeniden kur -->
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>

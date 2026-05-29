@@ -2,12 +2,12 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-   <item
+    <item
         android:id="@+id/action_search"
         android:title="🔍 Ara"
         android:icon="@android:drawable/ic_menu_search"
         app:showAsAction="always" />
-    
+
     <item
         android:id="@+id/action_change_model"
         android:title="🧠 Model Değiştir"
@@ -41,6 +41,11 @@
     <item
         android:id="@+id/action_restore"
         android:title="📂 Geri Yükle"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/action_update"
+        android:title="🆕 Güncelleme Kontrol Et"
         app:showAsAction="never" />
 
     <item
