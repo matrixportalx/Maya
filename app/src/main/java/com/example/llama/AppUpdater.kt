@@ -21,8 +21,8 @@ import java.net.URL
 
 object AppUpdater {
 
-    private const val GITHUB_OWNER = "matrixportalx"
-    private const val GITHUB_REPO  = "Maya"
+    internal const val GITHUB_OWNER = "matrixportalx"
+    internal const val GITHUB_REPO  = "Maya"
     private const val API_URL =
         "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
