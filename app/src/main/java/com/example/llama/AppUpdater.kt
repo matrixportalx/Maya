@@ -111,10 +111,7 @@ object AppUpdater {
 
     suspend fun downloadAndInstall(context: Context, info: UpdateInfo) {
         val fileName = "Maya-${info.versionName}.apk"
-        val destFile = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            fileName
-        )
+        val destFile = File(context.cacheDir, fileName)
 
         // Kurulum izni kontrolü — yoksa ayarlara yönlendir, indirme başlatma
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
