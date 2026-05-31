@@ -32,38 +32,56 @@ jobs:
           VERSION=$(grep 'versionName' app/build.gradle.kts | head -1 | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build APK
-        working-directory: .
+      - name: Keystore Hazırla
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+
+      - name: Build + Sign Universal APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
-
-      - name: Sign APK
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          ./gradlew assembleRelease -PtargetAbis="arm64-v8a,x86_64" --stacktrace
           $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | tail -1)/apksigner sign \
             --ks release.keystore \
             --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
             --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
             --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
             app/build/outputs/apk/release/app-release-unsigned.apk
+          mv app/build/outputs/apk/release/app-release-unsigned.apk Maya-universal.apk
 
-      - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release-unsigned.apk Maya.apk
+      - name: Build + Sign arm64-v8a APK
+        run: |
+          ./gradlew assembleRelease -PtargetAbis="arm64-v8a" --stacktrace
+          $ANDROID_HOME/build-tools/$(ls $ANDROID_HOME/build-tools/ | tail -1)/apksigner sign \
+            --ks release.keystore \
+            --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+            --ks-pass pass:"${{ secrets.STORE_PASSWORD }}" \
+            --key-pass pass:"${{ secrets.KEY_PASSWORD }}" \
+            app/build/outputs/apk/release/app-release-unsigned.apk
+          mv app/build/outputs/apk/release/app-release-unsigned.apk Maya-arm64-v8a.apk
 
-      - name: Upload Artifact
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Maya
-          path: Maya.apk
+          name: Maya-all
+          path: |
+            Maya-universal.apk
+            Maya-arm64-v8a.apk
 
       - name: Release Oluştur
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: "Maya v${{ steps.version.outputs.version }}"
-          files: Maya.apk
+          files: |
+            Maya-universal.apk
+            Maya-arm64-v8a.apk
           body: |
-            APK'yı indirmek için aşağıdaki `Maya.apk` dosyasına tıklayın.
+            APK'yı indirmek için aşağıdaki dosyalardan birini seçin:
+
+            | Dosya | Açıklama | Boyut |
+            |-------|----------|-------|
+            | `Maya-arm64-v8a.apk` | **Önerilen** — Snapdragon, Dimensity, Exynos (2019+) | Daha küçük |
+            | `Maya-universal.apk` | Tüm cihazlar + x86_64 emülatör | Daha büyük |
+
+            Cihazınız arm64 ise (neredeyse tüm modern Android telefonlar) `Maya-arm64-v8a.apk` tercih edin.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

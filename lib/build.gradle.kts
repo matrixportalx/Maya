@@ -16,7 +16,12 @@ android {
         consumerProguardFiles("consumer-rules.pro")
 
         ndk {
-             abiFilters += listOf("arm64-v8a", "x86_64")
+            val abisProperty = project.findProperty("targetAbis") as String?
+            if (abisProperty != null) {
+                abiFilters += abisProperty.split(",").map { it.trim() }
+            } else {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
         }
         externalNativeBuild {
             cmake {
