@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
@@ -34,7 +33,8 @@ object AppUpdater {
         val versionName: String,
         val releaseNotes: String,
         val apkUrl: String,
-        val apkSize: Long
+        val apkSize: Long,
+        val apkFileName: String = ""
     )
 
     // ── Güncelleme kontrolü ───────────────────────────────────────────────────
@@ -66,22 +66,56 @@ object AppUpdater {
                 val body    = json.optString("body", "")
                 val assets  = json.optJSONArray("assets")
 
-                var apkUrl  = ""
-                var apkSize = 0L
+                // ── Cihaz ABI'sine göre en uygun APK'yı seç ──────────────────
+                var apkUrl      = ""
+                var apkSize     = 0L
+                var apkFileName = ""
+
                 if (assets != null) {
+                    val deviceAbis = Build.SUPPORTED_ABIS.toList()
+                    MainActivity.log("Updater", "Cihaz ABI'leri: ${deviceAbis.joinToString()}")
+
+                    // Tüm APK asset'lerini topla
+                    data class ApkAsset(val name: String, val url: String, val size: Long)
+                    val apkAssets = mutableListOf<ApkAsset>()
+
                     for (i in 0 until assets.length()) {
                         val asset = assets.getJSONObject(i)
                         val name  = asset.optString("name", "")
                         if (name.endsWith(".apk", ignoreCase = true)) {
-                            apkUrl  = asset.optString("browser_download_url", "")
-                            apkSize = asset.optLong("size", 0L)
-                            break
+                            apkAssets.add(ApkAsset(
+                                name = name,
+                                url  = asset.optString("browser_download_url", ""),
+                                size = asset.optLong("size", 0L)
+                            ))
                         }
+                    }
+
+                    MainActivity.log("Updater", "Bulunan APK'lar: ${apkAssets.map { it.name }}")
+
+                    // Öncelik sırası:
+                    // 1. Cihazın birincil ABI'sini içeren APK (örn: arm64-v8a)
+                    // 2. universal APK
+                    // 3. Listedeki ilk APK
+                    val selected = deviceAbis.firstNotNullOfOrNull { abi ->
+                        apkAssets.find { asset ->
+                            asset.name.contains(abi.replace("-", ""), ignoreCase = true) ||
+                            asset.name.contains(abi, ignoreCase = true)
+                        }
+                    } ?: apkAssets.find { asset ->
+                        asset.name.contains("universal", ignoreCase = true)
+                    } ?: apkAssets.firstOrNull()
+
+                    if (selected != null) {
+                        apkUrl      = selected.url
+                        apkSize     = selected.size
+                        apkFileName = selected.name
+                        MainActivity.log("Updater", "Seçilen APK: $apkFileName")
                     }
                 }
 
                 if (apkUrl.isEmpty()) {
-                    MainActivity.log("Updater", "APK asset bulunamadı")
+                    MainActivity.log("Updater", "Uygun APK asset bulunamadı")
                     return@withContext null
                 }
 
@@ -97,7 +131,8 @@ object AppUpdater {
                     versionName  = remoteVersion,
                     releaseNotes = body.take(800),
                     apkUrl       = apkUrl,
-                    apkSize      = apkSize
+                    apkSize      = apkSize,
+                    apkFileName  = apkFileName
                 )
             } catch (e: Exception) {
                 MainActivity.log("Updater", "Güncelleme kontrolü hatası: ${e.message}")
@@ -107,13 +142,12 @@ object AppUpdater {
         withContext(Dispatchers.Main) { onResult(info) }
     }
 
-    // ── İndirme + Kurulum (DownloadManager YOK, Maya kendi indiriyor) ─────────
+    // ── İndirme + Kurulum ─────────────────────────────────────────────────────
 
     suspend fun downloadAndInstall(context: Context, info: UpdateInfo) {
-        val fileName = "Maya-${info.versionName}.apk"
+        val fileName = info.apkFileName.ifEmpty { "Maya-${info.versionName}.apk" }
         val destFile = File(context.cacheDir, fileName)
 
-        // Kurulum izni kontrolü — yoksa ayarlara yönlendir, indirme başlatma
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!context.packageManager.canRequestPackageInstalls()) {
                 val intent = Intent(
@@ -130,7 +164,6 @@ object AppUpdater {
             }
         }
 
-        // APK zaten varsa tekrar indirme
         if (destFile.exists() && destFile.length() > 10_000_000L) {
             MainActivity.log("Updater", "APK önbellekte, kurulum başlatılıyor")
             installApk(context, destFile)
@@ -142,7 +175,6 @@ object AppUpdater {
         createNotifChannel(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        // İndirme progress bildirimi
         fun notif(progress: Int, done: Boolean = false) {
             val title = if (done) "Maya ${info.versionName} indirildi" else "Maya ${info.versionName} indiriliyor"
             val text  = if (done) "Kurulum başlatılıyor…" else "%$progress"
@@ -152,9 +184,7 @@ object AppUpdater {
                 .setContentText(text)
                 .setOngoing(!done)
                 .setSilent(true)
-            if (!done) {
-                nb.setProgress(100, progress, progress == 0)
-            }
+            if (!done) nb.setProgress(100, progress, progress == 0)
             nm.notify(NOTIF_ID, nb.build())
         }
 
@@ -170,7 +200,6 @@ object AppUpdater {
                 conn.readTimeout    = 60_000
                 conn.instanceFollowRedirects = true
 
-                // GitHub redirect'lerini takip et
                 var finalConn = conn
                 var redirects = 0
                 while (finalConn.responseCode in 301..308 && redirects < 5) {
@@ -189,7 +218,7 @@ object AppUpdater {
 
                 finalConn.inputStream.use { input ->
                     FileOutputStream(destFile).use { output ->
-                        val buf = ByteArray(128 * 1024)  // 128 KB chunk
+                        val buf = ByteArray(128 * 1024)
                         var downloaded = 0L
                         var lastNotifPct = -1
                         var n: Int
