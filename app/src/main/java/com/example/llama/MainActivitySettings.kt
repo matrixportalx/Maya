@@ -421,6 +421,34 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         if (info != null) {
             devNameTv.text = info.name?.let { "$it (@${info.login})" } ?: "@${info.login}"
             devBioTv.text  = info.bio ?: "${info.publicRepos} repo  •  ${info.followers} takipçi"
+            // Avatar'ı arka planda indir
+            if (info.avatarUrl.isNotEmpty()) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val conn = java.net.URL(info.avatarUrl).openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 8_000
+                        conn.readTimeout = 8_000
+                        val bitmap = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                        conn.disconnect()
+                        if (bitmap != null) {
+                            // Yuvarlak kırp
+                            val size = bitmap.width.coerceAtMost(bitmap.height)
+                            val x = (bitmap.width - size) / 2
+                            val y = (bitmap.height - size) / 2
+                            val cropped = android.graphics.Bitmap.createBitmap(bitmap, x, y, size, size)
+                            val rounded = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+                            val canvas = android.graphics.Canvas(rounded)
+                            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+                            canvas.drawOval(android.graphics.RectF(0f, 0f, size.toFloat(), size.toFloat()), paint)
+                            paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+                            canvas.drawBitmap(cropped, 0f, 0f, paint)
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                devAvatar.setImageBitmap(rounded)
+                            }
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
         } else {
             devBioTv.text = "github.com/$ghOwner"
         }
