@@ -382,10 +382,8 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = (8 * dp).toInt() }
     }
-    val devAvatar = TextView(this).apply {
-        text = "👤"
-        textSize = 20f
-        gravity = android.view.Gravity.CENTER
+    val devAvatar = android.widget.ImageView(this).apply {
+        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
         layoutParams = LinearLayout.LayoutParams(
             (36 * dp).toInt(), (36 * dp).toInt()
         ).apply { marginEnd = (10 * dp).toInt() }
@@ -393,6 +391,8 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
             shape = GradientDrawable.OVAL
             setColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFE0E0F0.toInt())
         }
+        // Varsayılan emoji placeholder
+    setImageResource(android.R.drawable.ic_menu_myplaces)
     }
     val devInfo = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
