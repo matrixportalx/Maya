@@ -15,6 +15,16 @@
         android:layout_marginTop="2dp"
         android:layout_marginEnd="8dp">
 
+        <!-- Fotoğraf avatar (URI varsa gösterilir) -->
+        <ImageView
+            android:id="@+id/msg_avatar_image"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="Avatar" />
+
+        <!-- Emoji avatar (fotoğraf yoksa gösterilir) -->
         <TextView
             android:id="@+id/msg_avatar"
             android:layout_width="44dp"
@@ -81,7 +91,6 @@
             android:layout_marginBottom="4dp"
             android:visibility="gone">
 
-            <!-- Başlık satırı (tıklanabilir) -->
             <LinearLayout
                 android:id="@+id/thinking_header"
                 android:layout_width="match_parent"
@@ -111,7 +120,6 @@
                     android:paddingStart="4dp" />
             </LinearLayout>
 
-            <!-- Thinking içeriği -->
             <TextView
                 android:id="@+id/thinking_content"
                 android:layout_width="match_parent"
@@ -139,7 +147,7 @@
             android:textIsSelectable="true"
             android:textColorLink="?android:textColorLink" />
 
-        <!-- Aksiyon butonları: 📋 + t/s solda, 🔄 sağda -->
+        <!-- Aksiyon butonları -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -147,7 +155,6 @@
             android:gravity="center_vertical"
             android:layout_marginTop="2dp">
 
-            <!-- Kopyala (sol) -->
             <Button
                 android:id="@+id/btn_copy"
                 style="@style/Widget.Material3.Button.TextButton"
@@ -160,7 +167,6 @@
                 android:paddingHorizontal="6dp"
                 android:paddingVertical="2dp" />
 
-            <!-- t/s göstergesi -->
             <TextView
                 android:id="@+id/txt_tps"
                 android:layout_width="wrap_content"
@@ -170,13 +176,11 @@
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:visibility="gone" />
 
-            <!-- Ortadaki boşluk -->
             <View
                 android:layout_width="0dp"
                 android:layout_height="1dp"
                 android:layout_weight="1" />
 
-            <!-- Yeniden oluştur (sağ) -->
             <Button
                 android:id="@+id/btn_regenerate"
                 style="@style/Widget.Material3.Button.TextButton"
