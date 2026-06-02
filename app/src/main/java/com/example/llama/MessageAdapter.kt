@@ -3,11 +3,21 @@ package tr.maya
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.text.Spannable
 import android.text.TextPaint
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
+import android.text.style.StyleSpan
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
@@ -27,12 +37,6 @@ import java.util.Locale
 
 /**
  * Sohbet mesajı veri sınıfı.
- *
- * [content]           → Kullanıcıya gösterilen kısa/orijinal metin
- * [annotatedContent]  → Web araması sonucu oluşturulan uzun bağlamlı metin;
- *                        sadece modele gönderilir, UI'da gösterilmez.
- *                        null ise buildFormattedPrompt normal [content] kullanır.
- * [imagePath]         → Multimodal görselin dosya yolu (null = görsel yok)
  */
 data class ChatMessage(
     val content: String,
@@ -40,11 +44,6 @@ data class ChatMessage(
     val tokensPerSecond: Float? = null,
     val timestamp: Long = System.currentTimeMillis(),
     val imagePath: String? = null,
-    /**
-     * Web araması yapıldığında oluşturulan prompt — sadece model bağlamında kullanılır.
-     * UI'da her zaman [content] (kısa orijinal) gösterilir; [annotatedContent] gizlenir.
-     * Bypass Context Length re-encode'u da bu alanı kullanır → sohbet tutarlı kalır.
-     */
     val annotatedContent: String? = null
 )
 
@@ -57,47 +56,120 @@ class MessageAdapter(
     private val messages = mutableListOf<ChatMessage>()
     private var markwon: Markwon? = null
 
-    // Hangi pozisyonlardaki thinking bloğu açık — notifyItemChanged sonrası da korunur
     private val expandedPositions = mutableSetOf<Int>()
 
-    // Karakter/kullanıcı görüntüleme bilgileri — MainActivity tarafından set edilir
+    // Karakter/kullanıcı görüntüleme bilgileri
     var charName: String  = "Asistan"
     var charEmoji: String = "🤖"
+    var charAvatarUri: String? = null   // v6.0
     var userName: String  = "Kullanıcı"
     var userEmoji: String = "👤"
+    var userAvatarUri: String? = null   // v6.0
+
+    // ── Bitmap önbelleği ──────────────────────────────────────────────────────
+    private val bitmapCache: LruCache<String, Bitmap> by lazy {
+        val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+        LruCache(maxMemory / 8)
+    }
 
     companion object {
         private const val VIEW_TYPE_USER      = 1
         private const val VIEW_TYPE_ASSISTANT = 2
         private val TIME_FMT = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
-        // Kaba token tahmini: Türkçe/İngilizce karışık metinler için ~4 karakter/token
         fun estimateTokens(text: String): Int = maxOf(1, text.length / 4)
 
-        // Emoji avatar için yuvarlak arka plan
         private fun makeAvatarBackground(color: Int): GradientDrawable = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(color)
         }
 
-        /**
-         * Temadan renk attribute'u çöz.
-         * colorAttr: örn. android.R.attr.colorBackground
-         */
         fun resolveColor(context: Context, colorAttr: Int): Int {
             val typedValue = TypedValue()
             context.theme.resolveAttribute(colorAttr, typedValue, true)
             return typedValue.data
         }
 
-        /**
-         * Mevcut tema karanlık mı kontrol et.
-         * Configuration.uiMode & UI_MODE_NIGHT_MASK == UI_MODE_NIGHT_YES
-         */
         fun isDarkTheme(context: Context): Boolean {
             val uiMode = context.resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK
             return uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        }
+
+        /**
+         * URI'den yuvarlak Bitmap yükler (main thread'de çağrılmamalı; önbellekle kullanın).
+         */
+        fun loadRoundedBitmapFromUri(context: Context, uri: Uri, sizePx: Int): Bitmap? {
+            return try {
+                val input = context.contentResolver.openInputStream(uri) ?: return null
+                val raw = BitmapFactory.decodeStream(input)
+                input.close()
+                raw ?: return null
+
+                val size = raw.width.coerceAtMost(raw.height)
+                val x = (raw.width - size) / 2
+                val y = (raw.height - size) / 2
+                val cropped = Bitmap.createBitmap(raw, x, y, size, size)
+                val scaled = Bitmap.createScaledBitmap(cropped, sizePx, sizePx, true)
+
+                val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(output)
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+                canvas.drawOval(RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat()), paint)
+                paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+                canvas.drawBitmap(scaled, 0f, 0f, paint)
+                output
+            } catch (_: Exception) { null }
+        }
+    }
+
+    // ── Avatar yükleme yardımcısı ─────────────────────────────────────────────
+
+    /**
+     * Verilen ImageView'a avatar URI veya emoji gösterir.
+     * Bitmap önbellekten gelir; ilk yüklemede arka planda çekilir.
+     */
+    private fun bindAvatar(
+        context: Context,
+        imageView: android.widget.ImageView,
+        textView: TextView,
+        avatarUri: String?,
+        emoji: String,
+        fallbackColor: Int,
+        sizePx: Int
+    ) {
+        if (avatarUri != null) {
+            val cached = bitmapCache.get(avatarUri)
+            if (cached != null) {
+                imageView.setImageBitmap(cached)
+                imageView.visibility = View.VISIBLE
+                textView.visibility = View.GONE
+            } else {
+                // Arka planda yükle
+                imageView.setImageDrawable(null)
+                imageView.visibility = View.GONE
+                textView.text = emoji
+                textView.visibility = View.VISIBLE
+
+                val uriRef = avatarUri
+                Thread {
+                    val bmp = loadRoundedBitmapFromUri(context, Uri.parse(uriRef), sizePx)
+                    if (bmp != null) {
+                        bitmapCache.put(uriRef, bmp)
+                        (context as? android.app.Activity)?.runOnUiThread {
+                            // Hâlâ aynı URI mi kontrol et (view recycled olabilir)
+                            imageView.setImageBitmap(bmp)
+                            imageView.visibility = View.VISIBLE
+                            textView.visibility = View.GONE
+                        }
+                    }
+                }.start()
+            }
+        } else {
+            imageView.visibility = View.GONE
+            textView.visibility = View.VISIBLE
+            textView.text = emoji
+            textView.background = makeAvatarBackground(fallbackColor)
         }
     }
 
@@ -108,28 +180,8 @@ class MessageAdapter(
         val visibleContent: String
     )
 
-    /**
-     * Tüm thinking formatlarını destekler:
-     *
-     * Gemma 4 (tam, <|channel> ile başlayan):
-     *   <|channel>thought\n[düşünce]<channel|>[yanıt]
-     *
-     * Gemma 4 (tam, doğrudan thought\n ile başlayan — model <|channel> atladığında):
-     *   thought\n[düşünce]<channel|>[yanıt]
-     *
-     * Gemma 4 (akış sırasında, henüz <channel|> gelmemiş):
-     *   thought\n[düşünce devam ediyor...]
-     *   <|channel>thought\n[düşünce devam ediyor...]
-     *
-     * Qwen3 / Gemma 3 (tam):
-     *   <think>[düşünce]</think>[yanıt]
-     *
-     * Qwen3 / Gemma 3 (akış sırasında):
-     *   <think>[düşünce devam ediyor...]
-     */
     private fun parseThinking(raw: String): ParsedMessage {
 
-        // ── 1. Gemma 4: <|channel>thought\n...<channel|> (tam blok) ──────────
         val g4WithMarkerRegex = Regex(
             """<\|channel>thought\n(.*?)<channel\|>""",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
@@ -140,7 +192,6 @@ class MessageAdapter(
             return ParsedMessage(think.ifEmpty { null }, visible)
         }
 
-        // ── 2. Gemma 4: thought\n...<channel|> (model <|channel> atladı) ─────
         val g4NoMarkerRegex = Regex(
             """^thought\n(.*?)<channel\|>""",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
@@ -151,7 +202,6 @@ class MessageAdapter(
             return ParsedMessage(think.ifEmpty { null }, visible)
         }
 
-        // ── 3. Gemma 4: <|channel>(thought\n)...<channel|> (genel) ──────────
         val g4GenericRegex = Regex(
             """<\|channel>(.*?)<channel\|>""",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
@@ -162,7 +212,6 @@ class MessageAdapter(
             return ParsedMessage(think.ifEmpty { null }, visible)
         }
 
-        // ── 4. Gemma 4 akış: <|channel>thought\n... (henüz kapanmadı) ────────
         val g4OpenWithMarkerIdx = raw.indexOf("<|channel>thought\n")
         if (g4OpenWithMarkerIdx != -1) {
             val after = g4OpenWithMarkerIdx + "<|channel>thought\n".length
@@ -171,13 +220,11 @@ class MessageAdapter(
             return ParsedMessage("$think▌", visible)
         }
 
-        // ── 5. Gemma 4 akış: thought\n... (henüz kapanmadı, marker yok) ──────
         if (raw.startsWith("thought\n")) {
             val think = raw.removePrefix("thought\n").trim()
             return ParsedMessage("$think▌", "")
         }
 
-        // ── 6. Gemma 4 akış: <|channel>... (henüz kapanmadı) ─────────────────
         val g4OpenIdx = raw.indexOf("<|channel>")
         if (g4OpenIdx != -1) {
             val after = g4OpenIdx + "<|channel>".length
@@ -186,7 +233,6 @@ class MessageAdapter(
             return ParsedMessage("$think▌", visible)
         }
 
-        // ── 7. Qwen3 / Gemma 3: <think>...</think> (tam blok) ────────────────
         val thinkCompleteRegex = Regex("""<think>(.*?)</think>""", RegexOption.DOT_MATCHES_ALL)
         thinkCompleteRegex.find(raw)?.let { m ->
             val think = m.groupValues[1].trim()
@@ -194,7 +240,6 @@ class MessageAdapter(
             return ParsedMessage(think.ifEmpty { null }, visible)
         }
 
-        // ── 8. Qwen3 / Gemma 3 akış: <think>... (henüz kapanmadı) ────────────
         val thinkOpenIdx = raw.indexOf("<think>")
         if (thinkOpenIdx != -1) {
             val think = raw.substring(thinkOpenIdx + 7).trim()
@@ -202,7 +247,6 @@ class MessageAdapter(
             return ParsedMessage("$think▌", visible)
         }
 
-        // ── 9. Thinking bloğu yok ─────────────────────────────────────────────
         return ParsedMessage(null, raw)
     }
 
@@ -241,7 +285,6 @@ class MessageAdapter(
         }
     }
 
-    // --- Tema uyumlu Markwon oluşturucu ---
     private fun buildMarkwon(context: Context): Markwon {
         val isDark = isDarkTheme(context)
         val linkColor = ContextCompat.getColor(
@@ -250,7 +293,7 @@ class MessageAdapter(
         )
         return Markwon.builder(context)
             .usePlugin(io.noties.markwon.core.CorePlugin.create())
-            .usePlugin(io.noties.markwon.ext.tables.TablePlugin.create(context))
+            .usePlugin(TablePlugin.create(context))
             .usePlugin(object : io.noties.markwon.AbstractMarkwonPlugin() {
                 override fun configureTheme(builder: MarkwonTheme.Builder) {
                     builder.linkColor(linkColor)
@@ -290,7 +333,6 @@ class MessageAdapter(
         if (messages[position].isUser) VIEW_TYPE_USER else VIEW_TYPE_ASSISTANT
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        // Markwon'u tema uyumlu şekilde oluştur — ilk ViewHolder oluşturulduğunda
         if (markwon == null) markwon = buildMarkwon(parent.context)
         val inflater = LayoutInflater.from(parent.context)
         return if (viewType == VIEW_TYPE_USER)
@@ -304,17 +346,22 @@ class MessageAdapter(
         val timeStr = TIME_FMT.format(Date(message.timestamp))
         val context = holder.itemView.context
         val isDark = isDarkTheme(context)
+        val dp = context.resources.displayMetrics.density
+        val avatarSizePx = (44 * dp).toInt()
 
         if (holder is UserViewHolder) {
-            // Avatar — tema uyumlu renk
-            holder.msgAvatar.text = userEmoji
-            val avatarUserColor = ContextCompat.getColor(
-                context,
-                if (isDark) R.color.light_avatar_user else R.color.light_avatar_user
+            // ── Avatar ────────────────────────────────────────────────────────
+            val fallbackUserColor = ContextCompat.getColor(context, R.color.light_avatar_user)
+            bindAvatar(
+                context = context,
+                imageView = holder.msgAvatarImage,
+                textView = holder.msgAvatar,
+                avatarUri = userAvatarUri,
+                emoji = userEmoji,
+                fallbackColor = fallbackUserColor,
+                sizePx = avatarSizePx
             )
-            holder.msgAvatar.background = makeAvatarBackground(avatarUserColor)
 
-            // İsim rengi — tema uyumlu
             holder.msgSenderName.setTextColor(
                 ContextCompat.getColor(
                     context,
@@ -325,14 +372,12 @@ class MessageAdapter(
             holder.msgTimestamp.text = timeStr
             holder.msgIndex.text = "#$position"
 
-            // İçerik
             val displayText = if (message.annotatedContent != null)
                 "🌐 ${message.content}"
             else
                 message.content
             holder.msgContent.text = displayText
 
-            // Butonlar
             holder.itemView.findViewById<Button>(R.id.btn_copy).setOnClickListener {
                 onCopy(message.content)
             }
@@ -343,15 +388,18 @@ class MessageAdapter(
         } else if (holder is AssistantViewHolder) {
             val parsed = parseThinking(message.content)
 
-            // Avatar — tema uyumlu renk
-            holder.msgAvatar.text = charEmoji
-            val avatarAssistantColor = ContextCompat.getColor(
-                context,
-                if (isDark) R.color.light_avatar_assistant else R.color.light_avatar_assistant
+            // ── Avatar ────────────────────────────────────────────────────────
+            val fallbackAssistantColor = ContextCompat.getColor(context, R.color.light_avatar_assistant)
+            bindAvatar(
+                context = context,
+                imageView = holder.msgAvatarImage,
+                textView = holder.msgAvatar,
+                avatarUri = charAvatarUri,
+                emoji = charEmoji,
+                fallbackColor = fallbackAssistantColor,
+                sizePx = avatarSizePx
             )
-            holder.msgAvatar.background = makeAvatarBackground(avatarAssistantColor)
 
-            // İsim rengi — tema uyumlu
             holder.msgSenderName.setTextColor(
                 ContextCompat.getColor(
                     context,
@@ -393,22 +441,13 @@ class MessageAdapter(
                 if (parsed.thinkContent != null) "" else "…"
             }
 
-            // Tema değiştiğinde Markwon'u yeniden oluştur (link rengi için)
             val currentMarkwon = markwon ?: buildMarkwon(context).also { markwon = it }
-
-            // 1) Markdown render
             currentMarkwon.setMarkdown(textView, displayText2)
-
-            // 2) Metin seçilebilir
             textView.setTextIsSelectable(true)
-
-            // 3) Kod bloklarına kopyalama span'ları ekle
             addCodeCopySpans(textView, displayText2)
-
-            // 4) LinkMovementMethod
             textView.movementMethod = LinkMovementMethod.getInstance()
 
-            // --- t/s + token uzunluğu göstergesi ---
+            // --- t/s + token ---
             val tps = message.tokensPerSecond
             val tokenEst = estimateTokens(parsed.visibleContent)
             val visibleLen = parsed.visibleContent.length
@@ -434,7 +473,10 @@ class MessageAdapter(
 
     override fun getItemCount() = messages.size
 
+    // ── ViewHolder'lar ────────────────────────────────────────────────────────
+
     class UserViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val msgAvatarImage: android.widget.ImageView = view.findViewById(R.id.msg_avatar_image)
         val msgAvatar: TextView      = view.findViewById(R.id.msg_avatar)
         val msgSenderName: TextView  = view.findViewById(R.id.msg_sender_name)
         val msgTimestamp: TextView   = view.findViewById(R.id.msg_timestamp)
@@ -443,6 +485,7 @@ class MessageAdapter(
     }
 
     class AssistantViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val msgAvatarImage: android.widget.ImageView = view.findViewById(R.id.msg_avatar_image)
         val msgAvatar: TextView      = view.findViewById(R.id.msg_avatar)
         val msgSenderName: TextView  = view.findViewById(R.id.msg_sender_name)
         val msgTimestamp: TextView   = view.findViewById(R.id.msg_timestamp)

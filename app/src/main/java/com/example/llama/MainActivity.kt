@@ -40,6 +40,7 @@ import java.io.FileOutputStream
 // v5.5 - URL okuma: mesajdaki URL'leri otomatik çekip modele iletme
 // v5.8 - Tema desteği: Karanlık / Aydınlık / Sistem seçeneği
 // v5.9 - Uygulama içi güncelleme: GitHub Releases API
+// v6.0 - Avatar desteği: karakter ve kullanıcı için özel fotoğraf
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -47,7 +48,8 @@ data class MayaCharacter(
     val name: String,       // {{char}} için
     val userName: String,   // {{user}} için
     val emoji: String,
-    val systemPrompt: String
+    val systemPrompt: String,
+    val avatarUri: String? = null   // v6.0: Karakter avatar URI (kalıcı izinli)
 )
 
 // ── Özel şablon veri sınıfı ──────────────────────────────────────────────────
@@ -197,6 +199,9 @@ class MainActivity : AppCompatActivity() {
     internal var characters: MutableList<MayaCharacter> = mutableListOf()
     internal var activeCharacterId: String? = null
 
+    // ── v6.0: Kullanıcı avatarı ───────────────────────────────────────────────
+    internal var userAvatarUri: String? = null
+
     internal val currentMessages = mutableListOf<ChatMessage>()
 
     internal var generationService: MayaForegroundService? = null
@@ -211,6 +216,9 @@ class MainActivity : AppCompatActivity() {
 
     // ── v5.9: Bekleyen güncelleme bilgisi ─────────────────────────────────────
     internal var pendingUpdateInfo: AppUpdater.UpdateInfo? = null
+
+    // ── v6.0: Karakter avatar seçici için bekleyen karakter ID ───────────────
+    internal var pendingAvatarCharacterId: String? = null
 
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
@@ -292,12 +300,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** v4.8: Galeri resim seçici */
+    /** v4.8: Galeri resim seçici (sohbet görseli) */
     internal val imagePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri -> handleSelectedImage(uri) }
+        }
+    }
+
+    /** v6.0: Karakter avatar seçici */
+    internal val characterAvatarPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleCharacterAvatarSelected(uri, pendingAvatarCharacterId)
+                pendingAvatarCharacterId = null
+            }
+        }
+    }
+
+    /** v6.0: Kullanıcı avatar seçici */
+    internal val userAvatarPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                handleUserAvatarSelected(uri)
+            }
         }
     }
 
