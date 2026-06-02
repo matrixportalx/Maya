@@ -15,6 +15,16 @@
         android:layout_marginTop="2dp"
         android:layout_marginEnd="8dp">
 
+        <!-- Fotoğraf avatar (URI varsa gösterilir) -->
+        <ImageView
+            android:id="@+id/msg_avatar_image"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="Avatar" />
+
+        <!-- Emoji avatar (fotoğraf yoksa gösterilir) -->
         <TextView
             android:id="@+id/msg_avatar"
             android:layout_width="44dp"
