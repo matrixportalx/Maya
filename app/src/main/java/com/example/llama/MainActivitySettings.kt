@@ -84,6 +84,21 @@ internal fun MainActivity.loadSettings() {
     }
 
     applyActiveCharacterValues()
+
+    // ── v6.0: Aktif karakterin avatar URI'sini adapter'a aktar ───────────────
+    val activeChar = characters.find { it.id == activeCharacterId }
+    if (::messageAdapter.isInitialized) {
+        messageAdapter.charAvatarUri = activeChar?.avatarUri
+        messageAdapter.charEmoji     = activeChar?.emoji ?: "🤖"
+        messageAdapter.charName      = activeChar?.name  ?: charName
+        messageAdapter.userName      = activeChar?.userName ?: userName
+    }
+
+    // ── v6.0: Kullanıcı avatarı ───────────────────────────────────────────────
+    userAvatarUri = prefs.getString("user_avatar_uri", null)
+    if (::messageAdapter.isInitialized) {
+        messageAdapter.userAvatarUri = userAvatarUri
+    }
 }
 
 internal fun MainActivity.saveSettings() {
@@ -271,7 +286,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     val ghOwner = AppUpdater.GITHUB_OWNER
     val ghRepo  = AppUpdater.GITHUB_REPO
 
-    // ── Dış kart ──────────────────────────────────────────────────────────────
     val card = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(
@@ -286,7 +300,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         }
     }
 
-    // ── Başlık bandı ──────────────────────────────────────────────────────────
     val header = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = android.view.Gravity.CENTER_VERTICAL
@@ -316,13 +329,11 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFD8D8EC.toInt())
     }
 
-    // ── İçerik alanı ──────────────────────────────────────────────────────────
     val content = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding((16 * dp).toInt(), (14 * dp).toInt(), (16 * dp).toInt(), (14 * dp).toInt())
     }
 
-    // Uygulama adı + versiyon
     val appRow = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = android.view.Gravity.CENTER_VERTICAL
@@ -355,7 +366,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     appRow.addView(appInfoCol)
     content.addView(appRow)
 
-    // Açıklama
     val descTv = TextView(this).apply {
         text = "Tamamen çevrimdışı, llama.cpp tabanlı yerel LLM sohbet uygulaması. Hiçbir veri buluta gönderilmez."
         textSize = 12f
@@ -366,7 +376,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     }
     content.addView(descTv)
 
-    // İnce ayırıcı
     content.addView(android.view.View(this).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
@@ -374,7 +383,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFDDDDEE.toInt())
     })
 
-    // Geliştirici satırı — GitHub'dan dinamik doldurulacak
     val devRow = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = android.view.Gravity.CENTER_VERTICAL
@@ -391,8 +399,7 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
             shape = GradientDrawable.OVAL
             setColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFE0E0F0.toInt())
         }
-        // Varsayılan emoji placeholder
-    setImageResource(android.R.drawable.ic_menu_myplaces)
+        setImageResource(android.R.drawable.ic_menu_myplaces)
     }
     val devInfo = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -415,13 +422,11 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     devRow.addView(devInfo)
     content.addView(devRow)
 
-    // GitHub'dan bilgi yükle (async)
     lifecycleScope.launch {
         val info = fetchGitHubUserInfo(ghOwner)
         if (info != null) {
             devNameTv.text = info.name?.let { "$it (@${info.login})" } ?: "@${info.login}"
             devBioTv.text  = info.bio ?: "${info.publicRepos} repo  •  ${info.followers} takipçi"
-            // Avatar'ı arka planda indir
             if (info.avatarUrl.isNotEmpty()) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     try {
@@ -431,7 +436,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
                         val bitmap = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
                         conn.disconnect()
                         if (bitmap != null) {
-                            // Yuvarlak kırp
                             val size = bitmap.width.coerceAtMost(bitmap.height)
                             val x = (bitmap.width - size) / 2
                             val y = (bitmap.height - size) / 2
@@ -454,7 +458,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         }
     }
 
-    // Buton satırı: GitHub Profil + Repo
     val btnRow = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         layoutParams = LinearLayout.LayoutParams(
@@ -489,7 +492,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     btnRow.addView(linkBtn("📦  Repo", "https://github.com/$ghOwner/$ghRepo"))
     content.addView(btnRow)
 
-    // İnce ayırıcı
     content.addView(android.view.View(this).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()
@@ -497,7 +499,6 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
         setBackgroundColor(if (isDark) 0xFF2E2E4A.toInt() else 0xFFDDDDEE.toInt())
     })
 
-    // Lisans + sorumluluk reddi
     val legalTv = TextView(this).apply {
         text = "⚖️  MIT Lisansı  •  Tamamen çevrimdışı\nYapay zeka çıktıları geliştiricinin görüşlerini yansıtmaz. Kendi sorumluluğunuzda kullanın."
         textSize = 10f
@@ -1147,7 +1148,52 @@ internal fun MainActivity.showSettingsDialog() {
     secProfiles.addView(hintText("Her profil kendi saatinde çalışır. https:// ile başlayan konular RSS olarak çekilir."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 10: UYGULAMA TEMASI
+    // BÖLÜM 10: OTOMATİK GÜNCELLEME
+    // ═══════════════════════════════════════════════════════════════════════
+    val secUpdate = makeSectionCard(layout, "🆕", "Otomatik Güncelleme Kontrolü")
+
+    val updatePrefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    val autoUpdateEnabled = updatePrefs.getBoolean(AppUpdater.PREF_AUTO_UPDATE_ENABLED, true)
+    val autoUpdateInterval = updatePrefs.getLong(AppUpdater.PREF_AUTO_UPDATE_INTERVAL, AppUpdater.INTERVAL_DAILY)
+
+    val autoUpdateRow = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+    val autoUpdateLabel = TextView(ctx).apply {
+        text = "Otomatik güncelleme kontrolü"; textSize = 13f
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    @Suppress("DEPRECATION") val autoUpdateSwitch = Switch(ctx).apply { isChecked = autoUpdateEnabled }
+    autoUpdateRow.addView(autoUpdateLabel); autoUpdateRow.addView(autoUpdateSwitch)
+    secUpdate.addView(autoUpdateRow)
+
+    secUpdate.addView(subLabel("Kontrol Aralığı"))
+    val intervalGroup = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
+    val intervalOptions = listOf(
+        "1 saat"   to AppUpdater.INTERVAL_1H,
+        "3 saat"   to AppUpdater.INTERVAL_3H,
+        "6 saat"   to AppUpdater.INTERVAL_6H,
+        "12 saat"  to AppUpdater.INTERVAL_12H,
+        "Günlük"   to AppUpdater.INTERVAL_DAILY,
+        "3 günde bir" to AppUpdater.INTERVAL_3DAYS,
+        "Haftalık" to AppUpdater.INTERVAL_WEEKLY
+    )
+    var selectedIntervalMs = autoUpdateInterval
+    intervalOptions.forEach { (label, ms) ->
+        val rb = RadioButton(ctx).apply {
+            text = label
+            id = android.view.View.generateViewId()
+            isChecked = (autoUpdateInterval == ms)
+            setOnCheckedChangeListener { _, checked -> if (checked) selectedIntervalMs = ms }
+        }
+        intervalGroup.addView(rb)
+    }
+    secUpdate.addView(intervalGroup)
+    secUpdate.addView(hintText("Güncelleme kontrolü ağ bağlantısı gerektirir. Yalnızca GitHub Releases API'sine bağlanır."))
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 11: UYGULAMA TEMASI
     // ═══════════════════════════════════════════════════════════════════════
     val secTheme = makeSectionCard(layout, "🌓", "Uygulama Teması")
 
@@ -1160,7 +1206,7 @@ internal fun MainActivity.showSettingsDialog() {
     secTheme.addView(hintText("Değişiklik kaydedilince hemen uygulanır."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 11: ÖNBELLEK YÖNETİMİ
+    // BÖLÜM 12: ÖNBELLEK YÖNETİMİ
     // ═══════════════════════════════════════════════════════════════════════
     val secCache = makeSectionCard(layout, "🗂️", "Önbellek Yönetimi")
 
@@ -1179,7 +1225,7 @@ internal fun MainActivity.showSettingsDialog() {
     secCache.addView(hintText("Listeden kaldırılan modeller önbellekten de silinir."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 12: HAKKINDA
+    // BÖLÜM 13: HAKKINDA
     // ═══════════════════════════════════════════════════════════════════════
     addAboutSection(layout)
 
@@ -1250,6 +1296,18 @@ internal fun MainActivity.showSettingsDialog() {
             putBoolean(DailyReportWorker.KEY_REPORT_MODEL_NO_THINK, reportModelNoThink)
             putInt("report_context_size", reportCtxAligned)
         }.apply()
+
+        // ── Otomatik güncelleme ayarlarını kaydet ─────────────────────────────
+        getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit()
+            .putBoolean(AppUpdater.PREF_AUTO_UPDATE_ENABLED, autoUpdateSwitch.isChecked)
+            .putLong(AppUpdater.PREF_AUTO_UPDATE_INTERVAL, selectedIntervalMs)
+            // Aralık değiştiğinde bir sonraki kontrolü sıfırla
+            .also { ed ->
+                if (selectedIntervalMs != autoUpdateInterval) {
+                    ed.putLong(AppUpdater.PREF_LAST_CHECK, 0L)
+                }
+            }
+            .apply()
 
         appThemeMode = when {
             rbThemeDark.isChecked  -> MainActivity.THEME_DARK
