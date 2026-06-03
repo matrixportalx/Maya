@@ -87,18 +87,18 @@ internal fun MainActivity.loadSettings() {
 
     // ── v6.0: Aktif karakterin avatar URI'sini adapter'a aktar ───────────────
     val activeChar = characters.find { it.id == activeCharacterId }
-    if (::messageAdapter.isInitialized) {
+    try {
         messageAdapter.charAvatarUri = activeChar?.avatarUri
         messageAdapter.charEmoji     = activeChar?.emoji ?: "🤖"
         messageAdapter.charName      = activeChar?.name  ?: charName
         messageAdapter.userName      = activeChar?.userName ?: userName
-    }
+    } catch (_: UninitializedPropertyAccessException) {}
 
     // ── v6.0: Kullanıcı avatarı ───────────────────────────────────────────────
     userAvatarUri = prefs.getString("user_avatar_uri", null)
-    if (::messageAdapter.isInitialized) {
+    try {
         messageAdapter.userAvatarUri = userAvatarUri
-    }
+    } catch (_: UninitializedPropertyAccessException) {}
 }
 
 internal fun MainActivity.saveSettings() {
