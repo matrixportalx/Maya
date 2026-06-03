@@ -28,6 +28,20 @@ object AppUpdater {
     private const val NOTIF_CHANNEL = "maya_update"
     private const val NOTIF_ID      = 9001
 
+    // ── Otomatik güncelleme SharedPreferences anahtarları ─────────────────────
+    const val PREF_AUTO_UPDATE_ENABLED  = "auto_update_enabled"
+    const val PREF_AUTO_UPDATE_INTERVAL = "auto_update_interval_ms"
+    const val PREF_LAST_CHECK           = "last_update_check"
+
+    // ── Aralık sabitleri (ms) ─────────────────────────────────────────────────
+    const val INTERVAL_1H     = 1L  * 60 * 60 * 1000
+    const val INTERVAL_3H     = 3L  * 60 * 60 * 1000
+    const val INTERVAL_6H     = 6L  * 60 * 60 * 1000
+    const val INTERVAL_12H    = 12L * 60 * 60 * 1000
+    const val INTERVAL_DAILY  = 24L * 60 * 60 * 1000
+    const val INTERVAL_3DAYS  = 3L  * 24 * 60 * 60 * 1000
+    const val INTERVAL_WEEKLY = 7L  * 24 * 60 * 60 * 1000
+
     data class UpdateInfo(
         val tagName: String,
         val versionName: String,
@@ -36,6 +50,25 @@ object AppUpdater {
         val apkSize: Long,
         val apkFileName: String = ""
     )
+
+    // ── Otomatik (sessiz) güncelleme kontrolü ─────────────────────────────────
+    /**
+     * Ayarlardaki aralığa ve açma/kapama durumuna göre kontrol yapar.
+     * Kapalıysa veya henüz aralık dolmamışsa hiçbir şey yapmaz.
+     */
+    fun shouldCheckNow(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+        val enabled  = prefs.getBoolean(PREF_AUTO_UPDATE_ENABLED, true)
+        if (!enabled) return false
+        val interval = prefs.getLong(PREF_AUTO_UPDATE_INTERVAL, INTERVAL_DAILY)
+        val last     = prefs.getLong(PREF_LAST_CHECK, 0L)
+        return System.currentTimeMillis() - last >= interval
+    }
+
+    fun markChecked(context: Context) {
+        context.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+            .edit().putLong(PREF_LAST_CHECK, System.currentTimeMillis()).apply()
+    }
 
     // ── Güncelleme kontrolü ───────────────────────────────────────────────────
 
@@ -66,7 +99,6 @@ object AppUpdater {
                 val body    = json.optString("body", "")
                 val assets  = json.optJSONArray("assets")
 
-                // ── Cihaz ABI'sine göre en uygun APK'yı seç ──────────────────
                 var apkUrl      = ""
                 var apkSize     = 0L
                 var apkFileName = ""
@@ -75,7 +107,6 @@ object AppUpdater {
                     val deviceAbis = Build.SUPPORTED_ABIS.toList()
                     MainActivity.log("Updater", "Cihaz ABI'leri: ${deviceAbis.joinToString()}")
 
-                    // Tüm APK asset'lerini topla
                     data class ApkAsset(val name: String, val url: String, val size: Long)
                     val apkAssets = mutableListOf<ApkAsset>()
 
@@ -93,10 +124,6 @@ object AppUpdater {
 
                     MainActivity.log("Updater", "Bulunan APK'lar: ${apkAssets.map { it.name }}")
 
-                    // Öncelik sırası:
-                    // 1. Cihazın birincil ABI'sini içeren APK (örn: arm64-v8a)
-                    // 2. universal APK
-                    // 3. Listedeki ilk APK
                     val selected = deviceAbis.firstNotNullOfOrNull { abi ->
                         apkAssets.find { asset ->
                             asset.name.contains(abi.replace("-", ""), ignoreCase = true) ||

@@ -65,11 +65,15 @@ internal fun MainActivity.setupMessageList() {
     )
     messagesRv.layoutManager = LinearLayoutManager(this).also { it.stackFromEnd = true }
     messagesRv.adapter = messageAdapter
+
+    // ── v6.0: Aktif karakterin avatar/emoji bilgisini adapter'a aktar ─────────
     val activeChar = characters.find { it.id == activeCharacterId }
-    messageAdapter.charName  = activeChar?.name  ?: charName
-    messageAdapter.charEmoji = activeChar?.emoji ?: "🤖"
-    messageAdapter.userName  = activeChar?.userName ?: userName
-    messageAdapter.userEmoji = "👤"
+    messageAdapter.charName      = activeChar?.name  ?: charName
+    messageAdapter.charEmoji     = activeChar?.emoji ?: "🤖"
+    messageAdapter.charAvatarUri = activeChar?.avatarUri
+    messageAdapter.userName      = activeChar?.userName ?: userName
+    messageAdapter.userEmoji     = "👤"
+    messageAdapter.userAvatarUri = userAvatarUri
 
     messagesRv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
         override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
@@ -156,13 +160,15 @@ internal fun MainActivity.updateActiveModelSubtitle() {
 
 // ── Güncelleme kontrolü ───────────────────────────────────────────────────────
 
+/**
+ * Sessiz otomatik güncelleme kontrolü.
+ * AppUpdater.shouldCheckNow → aralık ve açma/kapama durumunu kontrol eder.
+ */
 internal fun MainActivity.checkForUpdateSilently() {
-    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
-    val lastCheck = prefs.getLong("last_update_check", 0L)
-    val now = System.currentTimeMillis()
-    if (now - lastCheck < 24 * 60 * 60 * 1000L) return
+    if (!AppUpdater.shouldCheckNow(this)) return
 
-    prefs.edit().putLong("last_update_check", now).apply()
+    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    AppUpdater.markChecked(this)
 
     lifecycleScope.launch {
         AppUpdater.checkForUpdate(
@@ -183,6 +189,7 @@ internal fun MainActivity.checkForUpdateNow() {
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     lifecycleScope.launch {
         supportActionBar?.subtitle = "🔍 Güncelleme kontrol ediliyor…"
+        AppUpdater.markChecked(this@checkForUpdateNow)
         AppUpdater.checkForUpdate(
             context        = this@checkForUpdateNow,
             currentVersion = prefs.getString("app_version_name", getVersionName()) ?: getVersionName()
