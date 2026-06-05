@@ -25,13 +25,16 @@ object AppUpdater {
     private const val API_URL =
         "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/releases/latest"
 
-    // İndirme süreci için sessiz kanal
+    // Sessiz indirme süreci kanalı
     private const val NOTIF_CHANNEL_DOWNLOAD  = "maya_update_download"
-    // Tamamlanma / güncelleme mevcut için sesli kanal
+    // Sesli: güncelleme mevcut bildirimi
+    private const val NOTIF_CHANNEL_AVAILABLE = "maya_update_available"
+    // Sesli: indirme tamamlandı bildirimi
     private const val NOTIF_CHANNEL_READY     = "maya_update_ready"
 
-    private const val NOTIF_ID_DOWNLOAD = 9001
-    private const val NOTIF_ID_READY    = 9002
+    private const val NOTIF_ID_DOWNLOAD  = 9001
+    private const val NOTIF_ID_READY     = 9002
+    private const val NOTIF_ID_AVAILABLE = 9003
 
     // ── Otomatik güncelleme SharedPreferences anahtarları ─────────────────────
     const val PREF_AUTO_UPDATE_ENABLED  = "auto_update_enabled"
@@ -167,7 +170,48 @@ object AppUpdater {
                 null
             }
         }
-        withContext(Dispatchers.Main) { onResult(info) }
+        withContext(Dispatchers.Main) {
+            // Güncelleme bulunduysa sistem bildirimi gönder
+            if (info != null) {
+                showAvailableNotification(context, info)
+            }
+            onResult(info)
+        }
+    }
+
+    /**
+     * Güncelleme bulunduğunda sesli sistem bildirimi gönderir.
+     * Kullanıcı bildirimi tıkladığında uygulama açılır.
+     */
+    fun showAvailableNotification(context: Context, info: UpdateInfo) {
+        createNotifChannels(context)
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pi = PendingIntent.getActivity(
+            context, NOTIF_ID_AVAILABLE, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val sizeStr = formatSize(info.apkSize)
+        val notif = NotificationCompat.Builder(context, NOTIF_CHANNEL_AVAILABLE)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setContentTitle("🆕 Maya ${info.versionName} mevcut$sizeStr")
+            .setContentText("Güncellemek için dokunun.")
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Maya ${info.versionName}$sizeStr yayınlandı. Güncellemek için dokunun.")
+            )
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
+
+        nm.notify(NOTIF_ID_AVAILABLE, notif)
+        MainActivity.log("Updater", "Güncelleme mevcut bildirimi gönderildi: ${info.versionName}")
     }
 
     // ── İndirme + Kurulum ─────────────────────────────────────────────────────
@@ -202,6 +246,9 @@ object AppUpdater {
 
         createNotifChannels(context)
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // "Mevcut" bildirimini kaldır, indirme bildirimi başlasın
+        nm.cancel(NOTIF_ID_AVAILABLE)
 
         fun downloadNotif(progress: Int) {
             val nb = NotificationCompat.Builder(context, NOTIF_CHANNEL_DOWNLOAD)
@@ -266,12 +313,8 @@ object AppUpdater {
                 MainActivity.log("Updater", "İndirme tamamlandı: ${destFile.length()} bytes")
 
                 withContext(Dispatchers.Main) {
-                    // Sessiz indirme bildirimini kaldır
                     nm.cancel(NOTIF_ID_DOWNLOAD)
-
-                    // Sesli "hazır" bildirimi göster
                     showReadyNotification(context, info, nm)
-
                     installApk(context, destFile)
                 }
 
@@ -287,8 +330,7 @@ object AppUpdater {
     }
 
     /**
-     * Güncelleme indirilip hazır olduğunda sesli bildirim gönderir.
-     * Kullanıcı bildirimi tıkladığında uygulamayı açar.
+     * İndirme tamamlandığında sesli bildirim gönderir.
      */
     private fun showReadyNotification(
         context: Context,
@@ -305,15 +347,14 @@ object AppUpdater {
 
         val notif = NotificationCompat.Builder(context, NOTIF_CHANNEL_READY)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("🆕 Maya ${info.versionName} hazır!")
-            .setContentText("Güncelleme indirildi. Kurmak için dokunun.")
+            .setContentTitle("✅ Maya ${info.versionName} indirildi")
+            .setContentText("Kurmak için dokunun.")
             .setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText("Maya ${info.versionName} başarıyla indirildi. Kurulum ekranını açmak için dokunun.")
             )
             .setContentIntent(pi)
             .setAutoCancel(true)
-            // Ses + titreşim için varsayılan efekti kullan
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
@@ -356,15 +397,15 @@ object AppUpdater {
     // ── Yardımcılar ───────────────────────────────────────────────────────────
 
     /**
-     * İki ayrı kanal oluşturur:
-     *   - maya_update_download : sessiz, süreç bildirimi (Importance LOW)
-     *   - maya_update_ready    : sesli + titreşimli, tamamlanma (Importance HIGH)
+     * Üç ayrı bildirim kanalı:
+     *   maya_update_download  → sessiz, indirme süreci (IMPORTANCE_LOW)
+     *   maya_update_available → sesli, güncelleme bulunduğunda (IMPORTANCE_HIGH)
+     *   maya_update_ready     → sesli, indirme tamamlandığında (IMPORTANCE_HIGH)
      */
     private fun createNotifChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-            // Sessiz indirme kanalı
             nm.createNotificationChannel(
                 NotificationChannel(
                     NOTIF_CHANNEL_DOWNLOAD,
@@ -373,11 +414,23 @@ object AppUpdater {
                 ).apply { setShowBadge(false) }
             )
 
-            // Sesli tamamlanma kanalı
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    NOTIF_CHANNEL_AVAILABLE,
+                    "Maya Güncelleme — Mevcut",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Yeni sürüm bulunduğunda ses ve titreşimle bildirir"
+                    enableVibration(true)
+                    enableLights(true)
+                    setShowBadge(true)
+                }
+            )
+
             nm.createNotificationChannel(
                 NotificationChannel(
                     NOTIF_CHANNEL_READY,
-                    "Maya Güncelleme — Hazır",
+                    "Maya Güncelleme — İndirildi",
                     NotificationManager.IMPORTANCE_HIGH
                 ).apply {
                     description = "Güncelleme indirildiğinde ses ve titreşimle bildirir"
