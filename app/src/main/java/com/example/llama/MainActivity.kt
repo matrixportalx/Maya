@@ -386,6 +386,7 @@ class MainActivity : AppCompatActivity() {
 
         // ── v5.9: Sessiz güncelleme kontrolü ─────────────────────────────────
         checkForUpdateSilently()
+        updateActiveModelSubtitle()
     }
 
     override fun onNewIntent(intent: Intent) {
