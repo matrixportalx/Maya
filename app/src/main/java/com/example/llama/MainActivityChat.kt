@@ -324,7 +324,7 @@ internal fun MainActivity.estimateTokenCount(text: String): Int =
 
 internal fun MainActivity.truncateMessagesForBypass(messages: List<ChatMessage>): List<ChatMessage> {
     val sysTokens  = estimateTokenCount(applyPersona(systemPrompt)) + 30
-    val reserved   = sysTokens + predictLength + 256
+    val reserved = sysTokens + maxOf(predictLength, 2048) + 256
     val available  = contextSize - reserved
 
     if (available <= 50) {
