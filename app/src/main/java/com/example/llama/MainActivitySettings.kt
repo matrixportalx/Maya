@@ -582,7 +582,7 @@ internal fun MainActivity.showSettingsDialog() {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
     }
-    val predictStep = 128; val predictMin = 128; val predictMax = 4096
+    val predictStep = 128; val predictMin = 128; val predictMax = 8192
     val predictBar = SeekBar(ctx).apply {
         max = (predictMax - predictMin) / predictStep
         progress = ((predictLength.coerceIn(predictMin, predictMax) - predictMin) / predictStep)
