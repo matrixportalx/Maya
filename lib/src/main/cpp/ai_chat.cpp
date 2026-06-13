@@ -194,10 +194,12 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageEmbed(
     const auto *image_path = env->GetStringUTFChars(jimagePath, nullptr);
     LOGi("nativeProcessImageEmbed: %s", image_path);
 
-    mtmd_bitmap * bmp = mtmd_helper_bitmap_init_from_file(g_mtmd_ctx, image_path);
+    // Yeni API (llama.cpp 0.15.x+): wrapper struct döner, 3. parametre placeholder=false
+    struct mtmd_helper_bitmap_wrapper bmp_wrapper =
+        mtmd_helper_bitmap_init_from_file(g_mtmd_ctx, image_path, /*placeholder=*/false);
     env->ReleaseStringUTFChars(jimagePath, image_path);
 
-    if (!bmp) {
+    if (!bmp_wrapper.bitmap) {
         LOGe("nativeProcessImageEmbed: mtmd_helper_bitmap_init_from_file başarısız");
         return 3;
     }
@@ -208,12 +210,12 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageEmbed(
     text_input.add_special   = false;
     text_input.parse_special = true;
 
-    const mtmd_bitmap * bitmaps[1] = { bmp };
+    const mtmd_bitmap * bitmaps[1] = { bmp_wrapper.bitmap };
 
     mtmd_input_chunks * chunks = mtmd_input_chunks_init();
     int32_t res = mtmd_tokenize(g_mtmd_ctx, chunks, &text_input, bitmaps, 1);
 
-    mtmd_bitmap_free(bmp);
+    mtmd_bitmap_free(bmp_wrapper.bitmap);
 
     if (res != 0) {
         LOGe("nativeProcessImageEmbed: mtmd_tokenize başarısız, res=%d", res);
