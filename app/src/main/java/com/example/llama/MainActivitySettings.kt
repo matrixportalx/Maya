@@ -1225,7 +1225,12 @@ internal fun MainActivity.showSettingsDialog() {
     secCache.addView(hintText("Listeden kaldırılan modeller önbellekten de silinir."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 13: HAKKINDA
+    // BÖLÜM 13: DREAM API  (v6.1)
+    // ═══════════════════════════════════════════════════════════════════════
+    val dreamSaveCallback = buildDreamApiSettingsCard(layout)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 14: HAKKINDA
     // ═══════════════════════════════════════════════════════════════════════
     addAboutSection(layout)
 
@@ -1301,7 +1306,6 @@ internal fun MainActivity.showSettingsDialog() {
         getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit()
             .putBoolean(AppUpdater.PREF_AUTO_UPDATE_ENABLED, autoUpdateSwitch.isChecked)
             .putLong(AppUpdater.PREF_AUTO_UPDATE_INTERVAL, selectedIntervalMs)
-            // Aralık değiştiğinde bir sonraki kontrolü sıfırla
             .also { ed ->
                 if (selectedIntervalMs != autoUpdateInterval) {
                     ed.putLong(AppUpdater.PREF_LAST_CHECK, 0L)
@@ -1317,6 +1321,11 @@ internal fun MainActivity.showSettingsDialog() {
         getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit()
             .putInt("app_theme_mode", appThemeMode).apply()
         MainActivity.applyThemeMode(appThemeMode)
+
+        // ── v6.1: Dream API ayarlarını kaydet ────────────────────────────────
+        dreamSaveCallback()
+        // Dream API menü öğesinin görünürlüğünü güncelle
+        invalidateOptionsMenu()
 
         updateWebSearchButton()
         updateActiveModelSubtitle()
