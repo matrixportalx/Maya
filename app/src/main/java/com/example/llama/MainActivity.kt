@@ -41,6 +41,7 @@ import java.io.FileOutputStream
 // v5.8 - Tema desteği: Karanlık / Aydınlık / Sistem seçeneği
 // v5.9 - Uygulama içi güncelleme: GitHub Releases API
 // v6.0 - Avatar desteği: karakter ve kullanıcı için özel fotoğraf
+// v6.1 - Dream API entegrasyonu: LocalDream SSE görüntü üretimi
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -220,6 +221,16 @@ class MainActivity : AppCompatActivity() {
     // ── v6.0: Karakter avatar seçici için bekleyen karakter ID ───────────────
     internal var pendingAvatarCharacterId: String? = null
 
+    // ── v6.1: Dream API ───────────────────────────────────────────────────────
+    internal var dreamApiEnabled: Boolean = false
+    internal var dreamApiUrl: String = "http://127.0.0.1:8081"
+    internal var dreamSize: Int = 512
+    internal var dreamSteps: Int = 20
+    internal var dreamCfg: Float = 7.0f
+    internal var dreamSeed: Long = -1L
+    internal var dreamUseOpenCl: Boolean = false
+    internal var dreamDefaultNegativePrompt: String = ""
+
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as MayaForegroundService.LocalBinder
@@ -350,6 +361,7 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString("app_version_name", currentVersionName).apply()
 
         loadSettings()
+        loadDreamSettings()           // v6.1: Dream API ayarları
         migrateModelsFromCacheToFilesDir()
         cleanupMissingModels()
         bindViews()
@@ -418,6 +430,9 @@ class MainActivity : AppCompatActivity() {
             updateItem?.title = "🆕 Güncelleme Mevcut! (${pendingUpdateInfo!!.versionName})"
         }
 
+        // v6.1: Dream API etkin değilse menü öğesini gizle
+        menu.findItem(R.id.action_dream)?.isVisible = dreamApiEnabled
+
         return true
     }
 
@@ -438,6 +453,7 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             R.id.action_logs         -> { showLogsDialog(); true }
+            R.id.action_dream        -> { showDreamApiDialog(); true }   // v6.1
             else -> super.onOptionsItemSelected(item)
         }
     }
