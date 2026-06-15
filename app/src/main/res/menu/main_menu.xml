@@ -9,6 +9,12 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/action_dream"
+        android:title="🎨 Görüntü Oluştur"
+        android:visible="false"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_change_model"
         android:title="🧠 Model Değiştir"
         app:showAsAction="never" />
