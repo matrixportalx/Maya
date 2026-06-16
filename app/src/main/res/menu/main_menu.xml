@@ -9,6 +9,11 @@
         app:showAsAction="always" />
 
     <item
+        android:id="@+id/action_mayagram"
+        android:title="📸 Mayagram"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_dream"
         android:title="🎨 Görüntü Oluştur"
         android:visible="false"
