@@ -42,6 +42,7 @@ import java.io.FileOutputStream
 // v5.9 - Uygulama içi güncelleme: GitHub Releases API
 // v6.0 - Avatar desteği: karakter ve kullanıcı için özel fotoğraf
 // v6.1 - Dream API entegrasyonu: LocalDream SSE görüntü üretimi
+// v6.2 - Mayagram: Maya karakterlerinin sosyal medya akışı
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -73,6 +74,15 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private val logBuffer = ArrayDeque<String>(200)
         var loggingEnabled: Boolean = false
+
+        /**
+         * v6.2: MayagramActivity'nin LLM + Dream API fonksiyonlarına erişebilmesi için
+         * mevcut MainActivity örneğine global referans.
+         * onResume'da set edilir, onDestroy'da temizlenir.
+         */
+        @Volatile
+        var currentInstance: MainActivity? = null
+            private set
 
         fun log(tag: String, msg: String) {
             if (!loggingEnabled) return
@@ -401,22 +411,29 @@ class MainActivity : AppCompatActivity() {
         updateActiveModelSubtitle()
     }
 
+    override fun onResume() {
+        super.onResume()
+        isAppInForeground = true
+        // v6.2: Mayagram için instance referansını kaydet
+        currentInstance = this
+        checkAndShowPendingDailyReport(intent)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isAppInForeground = false
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         try { checkAndShowPendingDailyReport(intent) } catch (_: Exception) {}
     }
 
-    override fun onResume() {
-        super.onResume()
-        isAppInForeground = true
-        checkAndShowPendingDailyReport(intent)
-    }
-
-    override fun onPause() { super.onPause(); isAppInForeground = false }
-
     override fun onDestroy() {
         super.onDestroy()
+        // v6.2: Instance referansını temizle
+        if (currentInstance === this) currentInstance = null
         engine.destroy()
         try { unbindService(serviceConnection) } catch (_: Exception) {}
     }
@@ -439,6 +456,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_search       -> { showSearchOverlay(); true }
+            R.id.action_mayagram     -> { openMayagram(); true }          // v6.2
             R.id.action_change_model -> { showModelPickerDialog(); true }
             R.id.action_model_info   -> { showModelInfoDialog(); true }
             R.id.action_export_chat  -> { exportChat(); true }
