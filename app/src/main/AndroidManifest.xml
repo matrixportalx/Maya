@@ -14,6 +14,9 @@
         android:maxSdkVersion="32" />
     <!-- APK kurulumu için -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- v6.2: Mayagram görüntülerini galeriye kaydetmek için -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
@@ -58,6 +61,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v6.2: Mayagram sosyal akış ekranı -->
+        <activity
+            android:name=".MayagramActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:parentActivityName=".MainActivity" />
 
         <service
             android:name=".MayaForegroundService"
