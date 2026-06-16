@@ -403,13 +403,23 @@ internal fun MainActivity.showDreamApiDialog() {
                                 progressLabel.text = "Tamamlandı (${event.generationTimeMs}ms)"
                                 previewImageView.setImageBitmap(event.bitmap)
                                 previewImageView.visibility = android.view.View.VISIBLE
-
+    
                                 // Dosyaya kaydet ve sohbete ekle
                                 val path = saveDreamBitmap(this@showDreamApiDialog, event.bitmap)
                                 addDreamImageToChat(prompt, path, event.bitmap)
-
-                                dialog.dismiss()
+    
+                                // Negatif buton metnini "Kapat" yap
+                                val negBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+                                negBtn?.text = "Kapat"
+                                negBtn?.setOnClickListener {
+                                    dialog.dismiss()
+                                }
+    
+                                // Pozitif buton gizle veya deaktif et
+                                btn.isEnabled = false
+                                btn.visibility = android.view.View.GONE
                             }
+
                             is DreamEvent.Error -> {
                                 progressLabel.text = "❌ ${event.message}"
                                 btn.isEnabled = true
