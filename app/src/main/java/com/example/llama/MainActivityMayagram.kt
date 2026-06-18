@@ -238,7 +238,7 @@ private fun MainActivity.buildMayagramCommentPrompt(
  *   <think>...</think>                 (Qwen3 vb. kapalı)
  *   <think>...                         (açık kalmış)
  */
-private fun extractVisibleContent(raw: String): String {
+private fun MainActivity.extractVisibleContent(raw: String): String {
     var text = raw
 
     // Gemma 4: kapalı thinking — <|channel>thought\n...<channel|>
