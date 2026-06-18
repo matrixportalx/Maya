@@ -247,11 +247,7 @@ private fun MainActivity.buildMayagramCommentPrompt(
 private fun MainActivity.extractVisibleContent(raw: String): String {
     var text = raw
 
-    // Gemma 4: kapalı thinking — <|channel>thought\n...<channel|>
-    text = text.replace(
-        Regex("""<\|channel>thought\n.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
-    )
-    // Gemma 4: kapalı thinking — <|channel>...<channel|> (generic)
+    // Gemma 4: TÜM <|channel>...</channel|> bloklarını temizle
     text = text.replace(
         Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
     )
@@ -261,7 +257,7 @@ private fun MainActivity.extractVisibleContent(raw: String): String {
         Regex("""<think>.*?</think>""",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)), ""
     )
-    // Açık kalmış <think> — sonrasını at
+    // Açık kalmış <think>
     val thinkIdx = text.indexOf("<think>")
     if (thinkIdx != -1) {
         text = text.substring(0, thinkIdx)
@@ -284,7 +280,7 @@ private fun MainActivity.extractVisibleContent(raw: String): String {
         .replace("<|end_of_text|>", "")
         .replace("<|endoftext|>", "")
 
-    // {{user}} / {{char}} placeholder çözümle
+    // {{user}} / {{char}}
     text = text
         .replace("{{user}}", userName)
         .replace("{{char}}", charName)
