@@ -164,12 +164,18 @@ internal fun MainActivity.generateCharacterComment(
             val sb = StringBuilder()
             engine.sendUserPrompt(prompt, predictLength = 100).collect { sb.append(it) }
 
-            val text = extractVisibleContent(sb.toString())
-                .lines()
-                .map { it.trim() }
-                .filter { it.isNotBlank() && it.length > 2 }
-                .filterNot { it.startsWith("CAPTION:") || it.startsWith("IMAGE_PROMPT:") }
-                .firstOrNull() ?: return@launch
+            val rawText = extractVisibleContent(sb.toString())
+            val text = rawText
+                .replace("CAPTION:", "")
+                .replace("IMAGE_PROMPT:", "")
+                .replace("\"", "")
+                .trim()
+                .takeIf { it.length > 2 }
+
+            if (text == null) {
+                MainActivity.log("Mayagram", "Yorum çıkarılamadı. Ham: $rawText")
+                return@launch
+            }
 
             val comment = MayagramComment(
                 postId          = post.id,
