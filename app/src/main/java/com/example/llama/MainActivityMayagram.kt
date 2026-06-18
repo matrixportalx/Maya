@@ -238,24 +238,41 @@ private fun MainActivity.buildMayagramCommentPrompt(
  *   <think>...</think>                 (Qwen3 vb. kapalı)
  *   <think>...                         (açık kalmış)
  */
-private fun MainActivity.extractVisibleContent(raw: String): String {
+private fun cleanMayagramResponse(raw: String): String {
     var text = raw
+        .replace("<|END_OF_TURN_TOKEN|>", "")
+        .replace("<|im_end|>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<end_of_turn>", "")
+        .replace("<turn|>", "")
+        .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+        .trim()
 
-    // Gemma 4: kapalı thinking — <|channel>thought\n...<channel|>
-    text = text.replace(
-        Regex("""<\|channel>thought\n.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
-    )
-    // Gemma 4: kapalı thinking — <|channel>...<channel|> (generic)
-    text = text.replace(
-        Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
-    )
+    // Gemma 4 thinking bloğu: <|channel>thought\n...<channel|>GERÇEK_YANIT
+    val channelClose = "<channel|>"
+    if (text.contains(channelClose)) {
+        val afterClose = text.substringAfter(channelClose).trim()
+        if (afterClose.isNotBlank()) {
+            text = afterClose
+        }
+        // afterClose boşsa text'i olduğu gibi bırak, aşağıdaki stripped fallback devreye girer
+    }
 
-    // Gemma 4: açık kalmış — "thought\n..." ile başlıyorsa <channel|>'dan sonrasını al
+    // thought\n ile başlıyorsa (kapanış token'ı gelmemişse) ilk satırı at
     val trimmed = text.trimStart()
     if (trimmed.startsWith("thought\n") || trimmed.startsWith("<|channel>")) {
-        val afterClose = text.substringAfter("<channel|>", "")
-        text = afterClose
+        val stripped = trimmed
+            .removePrefix("<|channel>")
+            .removePrefix("thought\n")
+            .trim()
+        // stripped boş değilse kullan; boşsa orijinal text'i koru
+        if (stripped.isNotBlank()) {
+            text = stripped
+        }
     }
+
+    return text
+}
 
     // Qwen3 vb.: <think>...</think>
     text = text.replace(
