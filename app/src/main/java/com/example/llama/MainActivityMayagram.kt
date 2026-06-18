@@ -256,13 +256,6 @@ private fun MainActivity.extractVisibleContent(raw: String): String {
         Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
     )
 
-    // Gemma 4: açık kalmış — "thought\n..." ile başlıyorsa <channel|>'dan sonrasını al
-    val trimmed = text.trimStart()
-    if (trimmed.startsWith("thought\n") || trimmed.startsWith("<|channel>")) {
-        val afterClose = text.substringAfter("<channel|>", "")
-        text = afterClose
-    }
-
     // Qwen3 vb.: <think>...</think>
     text = text.replace(
         Regex("""<think>.*?</think>""",
