@@ -65,14 +65,19 @@ internal fun MainActivity.generateMayagramPost(
             val sb = StringBuilder()
 
             try {
-                engine.sendUserPrompt(fullPrompt, predictLength = 250).collect { token ->
+                val impl = engine as? InferenceEngineImpl
+                val tokenFlow = if (impl != null) {
+                    impl.sendBypassPrompt(fullPrompt, 250)
+                } else {
+                    engine.sendUserPrompt(fullPrompt, predictLength = 250)
+                }
+                tokenFlow.collect { token ->
                     sb.append(token)
                 }
             } catch (e: Exception) {
                 onError("LLM hatası: ${e.message}")
                 return@launch
             }
-
             val raw = extractVisibleContent(sb.toString())
             MainActivity.log("Mayagram", "Ham yanıt (temizlenmiş): $raw")
 
