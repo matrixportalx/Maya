@@ -27,6 +27,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 import android.util.Base64
+import android.content.Intent
 
 // ── Dream API veri sınıfları ──────────────────────────────────────────────────
 
