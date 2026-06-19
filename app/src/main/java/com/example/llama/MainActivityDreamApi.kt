@@ -404,21 +404,28 @@ internal fun MainActivity.showDreamApiDialog() {
                                 progressLabel.text = "Tamamlandı (${event.generationTimeMs}ms)"
                                 previewImageView.setImageBitmap(event.bitmap)
                                 previewImageView.visibility = android.view.View.VISIBLE
-    
-                                // Dosyaya kaydet ve sohbete ekle
+
+                                // Dosyaya kaydet (cache) — galeri/paylaş butonları bu path'i kullanacak
                                 val path = saveDreamBitmap(this@showDreamApiDialog, event.bitmap)
-                                addDreamImageToChat(prompt, path, event.bitmap)
-    
-                                // Negatif buton metnini "Kapat" yap
-                                val negBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-                                negBtn?.text = "Kapat"
-                                negBtn?.setOnClickListener {
-                                    dialog.dismiss()
+
+                                // Pozitif butonu "Galeriye Kaydet" olarak yeniden kullan
+                                btn.text = "💾 Galeriye Kaydet"
+                                btn.isEnabled = true
+                                btn.setOnClickListener {
+                                    saveDreamImageToGallery(path)
                                 }
-    
-                                // Pozitif buton gizle veya deaktif et
-                                btn.isEnabled = false
-                                btn.visibility = android.view.View.GONE
+
+                                // Negatif butonu "Paylaş" yap
+                                val negBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+                                negBtn?.text = "📤 Paylaş"
+                                negBtn?.setOnClickListener {
+                                    shareDreamImage(path)
+                                }
+
+                                // Neutral butonu "Kapat" yap (henüz yoksa diyalog builder'a eklenmeli — aşağıya bak)
+                                val neutralBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL)
+                                neutralBtn?.text = "Kapat"
+                                neutralBtn?.setOnClickListener { dialog.dismiss() }
                             }
 
                             is DreamEvent.Error -> {
