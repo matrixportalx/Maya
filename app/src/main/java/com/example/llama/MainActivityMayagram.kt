@@ -161,7 +161,7 @@ internal fun MainActivity.generateCharacterComment(
             val tokenFlow = if (impl != null) {
                 impl.sendBypassPrompt(prompt, )
             } else {
-                engine.sendUserPrompt(prompt, predictLength = 200)
+                engine.sendUserPrompt(prompt, predictLength = 100)
             }
             tokenFlow.collect { sb.append(it) }
 
