@@ -35,7 +35,6 @@ internal fun MainActivity.generateMayagramPost(
 
     lifecycleScope.launch {
         try {
-            engine.resetContext()
             onProgress("✍️ ${character.name} yazıyor…")
 
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
