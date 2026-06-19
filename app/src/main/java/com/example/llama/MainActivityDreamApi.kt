@@ -658,3 +658,60 @@ internal fun MainActivity.buildDreamApiSettingsCard(
         saveDreamSettings()
     }
 }
+// ── Galeriye kaydet / Paylaş (Dream API üretimleri) ──────────────────────────
+
+internal fun MainActivity.saveDreamImageToGallery(imagePath: String) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val src = File(imagePath)
+            if (!src.exists()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery, "Dosya bulunamadı", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                    "maya_${System.currentTimeMillis()}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Maya")
+            }
+            val uri = contentResolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+            )
+            if (uri != null) {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    src.inputStream().use { it.copyTo(out) }
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery,
+                        "✅ Galeriye kaydedildi (Pictures/Maya)", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery, "Kaydetme başarısız", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@saveDreamImageToGallery, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+internal fun MainActivity.shareDreamImage(imagePath: String) {
+    try {
+        val file = File(imagePath)
+        if (!file.exists()) { Toast.makeText(this, "Dosya bulunamadı", Toast.LENGTH_SHORT).show(); return }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.provider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "Görüntüyü Paylaş"))
+    } catch (e: Exception) {
+        Toast.makeText(this, "Paylaşılamadı: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
