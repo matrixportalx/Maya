@@ -344,8 +344,9 @@ internal fun MainActivity.showDreamApiDialog() {
     val dialog = android.app.AlertDialog.Builder(this)
         .setTitle("🎨 Görüntü Oluştur")
         .setView(scroll)
-        .setPositiveButton("Oluştur", null)   // listener aşağıda override edilecek
+        .setPositiveButton("Oluştur", null)
         .setNegativeButton("İptal") { _, _ -> activeJob?.cancel() }
+        .setNeutralButton("Kapat", null)
         .create()
 
     dialog.setOnShowListener {
