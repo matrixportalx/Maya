@@ -34,7 +34,7 @@ internal fun MainActivity.generateMayagramPost(
 
     lifecycleScope.launch {
         try {
-            engine.reset() 
+            engine.reset()
             onProgress("✍️ ${character.name} yazıyor…")
 
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
@@ -161,6 +161,7 @@ internal fun MainActivity.generateCharacterComment(
 
     lifecycleScope.launch {
         try {
+            engine.reset()
             val prompt = buildMayagramCommentPrompt(post, commenter)
             val sb = StringBuilder()
             engine.sendUserPrompt(prompt, predictLength = 100).collect { sb.append(it) }
