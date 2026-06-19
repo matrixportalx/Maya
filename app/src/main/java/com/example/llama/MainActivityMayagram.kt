@@ -169,7 +169,13 @@ internal fun MainActivity.generateCharacterComment(
             engine.resetContext()
             val prompt = buildMayagramCommentPrompt(post, commenter)
             val sb = StringBuilder()
-            engine.sendUserPrompt(prompt, predictLength = 100).collect { sb.append(it) }
+            val impl = engine as? InferenceEngineImpl
+            val tokenFlow = if (impl != null) {
+                impl.sendBypassPrompt(prompt, 100)
+            } else {
+                engine.sendUserPrompt(prompt, predictLength = 100)
+            }
+            tokenFlow.collect { sb.append(it) }
 
             val rawText = extractVisibleContent(sb.toString())
             val text = rawText
