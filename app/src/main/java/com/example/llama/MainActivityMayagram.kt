@@ -166,7 +166,6 @@ internal fun MainActivity.generateCharacterComment(
 
     lifecycleScope.launch {
         try {
-            engine.resetContext()
             val prompt = buildMayagramCommentPrompt(post, commenter)
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
