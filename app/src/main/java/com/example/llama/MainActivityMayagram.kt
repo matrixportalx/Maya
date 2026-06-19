@@ -39,16 +39,6 @@ internal fun MainActivity.generateMayagramPost(
 
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
 
-            // Her seferinde farklı içerik için rastgele bir ruh hali ekle
-            val moods = listOf(
-                "Bugün özellikle neşeli ve enerjik hissediyorsun.",
-                "Bugün biraz düşünceli ve derin bir ruh halindeysin.",
-                "Bugün meraklı ve keşfetmeye açık hissediyorsun.",
-                "Bugün nostaljik ve duygusal bir ruh halindeysin.",
-                "Bugün heyecanlı, yeni bir şeyler paylaşmak istiyorsun."
-            )
-            val randomMood = moods.random()
-
             val systemInstr = buildString {
                 appendLine("Sen ${character.name} karakterisin. ${character.systemPrompt}")
                 appendLine()
