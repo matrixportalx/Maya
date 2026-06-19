@@ -52,7 +52,6 @@ internal fun MainActivity.generateMayagramPost(
             val systemInstr = buildString {
                 appendLine("Sen ${character.name} karakterisin. ${character.systemPrompt}")
                 appendLine()
-                appendLine(randomMood)
                 if (topicLine.isNotBlank()) appendLine(topicLine)
                 appendLine()
                 appendLine("Bir sosyal medya gönderisi hazırla. TAM OLARAK şu formatta yanıt ver (başka hiçbir şey yazma, açıklama yapma):")
