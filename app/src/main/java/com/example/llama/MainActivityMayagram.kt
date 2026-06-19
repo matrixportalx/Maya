@@ -247,7 +247,7 @@ private fun MainActivity.buildMayagramCommentPrompt(
 private fun MainActivity.extractVisibleContent(raw: String): String {
     var text = raw
 
-    // Gemma 4: TÜM <|channel>...</channel|> bloklarını temizle
+    // Gemma 4: <|channel>...</channel|> bloklarını temizle
     text = text.replace(
         Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
     )
@@ -257,13 +257,12 @@ private fun MainActivity.extractVisibleContent(raw: String): String {
         Regex("""<think>.*?</think>""",
             setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)), ""
     )
-    // Açık kalmış <think>
     val thinkIdx = text.indexOf("<think>")
     if (thinkIdx != -1) {
         text = text.substring(0, thinkIdx)
     }
 
-    // Format tokenları
+    // Format tokenlarını temizle
     text = text
         .replace("<|END_OF_TURN_TOKEN|>", "")
         .replace("<|START_OF_TURN_TOKEN|>", "")
@@ -284,6 +283,21 @@ private fun MainActivity.extractVisibleContent(raw: String): String {
     text = text
         .replace("{{user}}", userName)
         .replace("{{char}}", charName)
+
+    // ── KRİTİK: CAPTION: veya IMAGE_PROMPT: varsa öncesini at ──
+    val captionIdx = text.indexOf("CAPTION:", ignoreCase = true)
+    val imageIdx   = text.indexOf("IMAGE_PROMPT:", ignoreCase = true)
+
+    val startIdx = when {
+        captionIdx >= 0 && imageIdx >= 0 -> minOf(captionIdx, imageIdx)
+        captionIdx >= 0 -> captionIdx
+        imageIdx   >= 0 -> imageIdx
+        else -> -1
+    }
+
+    if (startIdx > 0) {
+        text = text.substring(startIdx)
+    }
 
     return text.trim()
 }
