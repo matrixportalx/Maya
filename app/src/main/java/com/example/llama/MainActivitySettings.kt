@@ -1264,18 +1264,31 @@ internal fun MainActivity.showSettingsDialog() {
     // ═══════════════════════════════════════════════════════════════════════
     // KAYDET / İPTAL
     // ═══════════════════════════════════════════════════════════════════════
+    // Sabit alt buton çubuğu — scroll dışında, her zaman görünür
     val btnRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.END
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (16*dp).toInt() }
+        setPadding((16*dp).toInt(), (10*dp).toInt(), (16*dp).toInt(), (10*dp).toInt())
+        setBackgroundColor(if (isDark) 0xFF1E1E1E.toInt() else 0xFFFFFFFF.toInt())
+        elevation = 4 * dp
     }
     val btnIptal = android.widget.Button(ctx).apply {
         text = "✖ İptal"; isAllCaps = false
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = (8*dp).toInt() }
     }
     val btnKaydet = android.widget.Button(ctx).apply { text = "✔ Kaydet"; isAllCaps = false }
-    btnRow.addView(btnIptal); btnRow.addView(btnKaydet); layout.addView(btnRow)
+    btnRow.addView(btnIptal); btnRow.addView(btnKaydet)
+    rootLayout.addView(btnRow)
 
-    val dialog = android.app.AlertDialog.Builder(this).setTitle("⚙️ Ayarlar").setView(scrollView).create()
+    val dialog = android.app.AlertDialog.Builder(ctx, android.R.style.Theme_Material_NoActionBar)
+        .setView(rootLayout)
+        .create()
+    dialog.window?.apply {
+        setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+        setWindowAnimations(android.R.style.Animation_Dialog)
+    }
 
     btnIptal.setOnClickListener { dialog.dismiss() }
     btnKaydet.setOnClickListener {
