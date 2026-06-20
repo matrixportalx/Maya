@@ -523,6 +523,7 @@ internal fun MainActivity.showSettingsDialog() {
     val isDark = MessageAdapter.isDarkTheme(this)
 
     // ── Tam ekran kök yapı: [sabit toolbar] + [esnek scroll içerik] + [sabit alt buton çubuğu] ──
+    lateinit var dialogRef: android.app.AlertDialog
     val rootLayout = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         setBackgroundColor(if (isDark) 0xFF121212.toInt() else 0xFFF0F2F5.toInt())
