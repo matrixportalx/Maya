@@ -1290,6 +1290,7 @@ internal fun MainActivity.showSettingsDialog() {
     val dialog = android.app.AlertDialog.Builder(ctx, android.R.style.Theme_Material_NoActionBar)
         .setView(rootLayout)
         .create()
+    dialogRef = dialog
     dialog.window?.apply {
         setLayout(
             android.view.WindowManager.LayoutParams.MATCH_PARENT,
