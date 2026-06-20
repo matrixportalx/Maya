@@ -351,28 +351,37 @@ class MayagramActivity : AppCompatActivity() {
     // ── Tam ekran görüntü ─────────────────────────────────────────────────────
 
     private fun showFullImage(imagePath: String) {
-        val bmp = BitmapFactory.decodeFile(imagePath) ?: run {
-            Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val dp = resources.displayMetrics.density
-        val iv = ImageView(this).apply {
-            setImageBitmap(bmp)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-        }
-        val sv = ScrollView(this).apply {
-            addView(iv)
-            setPadding((8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
-        }
-        AlertDialog.Builder(this)
-            .setTitle("🖼️ Görüntü")
-            .setView(sv)
-            .setPositiveButton("📤 Paylaş") { _, _ -> shareImage(imagePath) }
-            .setNeutralButton("💾 Galeriye Kaydet") { _, _ -> saveToGallery(imagePath) }
-            .setNegativeButton("Kapat", null)
-            .show()
+    val bmp = BitmapFactory.decodeFile(imagePath) ?: run {
+        Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
+        return
     }
+    val dp = resources.displayMetrics.density
+    val screenWidth = resources.displayMetrics.widthPixels
+    val targetWidth = (screenWidth * 0.85f).toInt()
+
+    val iv = ImageView(this).apply {
+        setImageBitmap(bmp)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        adjustViewBounds = true
+        layoutParams = LinearLayout.LayoutParams(
+            targetWidth,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+    }
+    val container = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = android.view.Gravity.CENTER
+        setPadding((8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
+        addView(iv)
+    }
+    AlertDialog.Builder(this)
+        .setTitle("🖼️ Görüntü")
+        .setView(container)
+        .setPositiveButton("📤 Paylaş") { _, _ -> shareImage(imagePath) }
+        .setNeutralButton("💾 Galeriye Kaydet") { _, _ -> saveToGallery(imagePath) }
+        .setNegativeButton("Kapat", null)
+        .show()
+}
 
     private fun shareImage(imagePath: String) {
         try {
