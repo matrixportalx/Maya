@@ -522,13 +522,40 @@ internal fun MainActivity.showSettingsDialog() {
     val dp = resources.displayMetrics.density
     val isDark = MessageAdapter.isDarkTheme(this)
 
-    val scrollView = ScrollView(ctx)
+    // ── Tam ekran kök yapı: [sabit toolbar] + [esnek scroll içerik] + [sabit alt buton çubuğu] ──
+    val rootLayout = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(if (isDark) 0xFF121212.toInt() else 0xFFF0F2F5.toInt())
+    }
+
+    // Üst toolbar
+    val topBar = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        setPadding((16*dp).toInt(), (12*dp).toInt(), (16*dp).toInt(), (12*dp).toInt())
+        setBackgroundColor(if (isDark) 0xFF1E1E1E.toInt() else 0xFFFFFFFF.toInt())
+        elevation = 4 * dp
+    }
+    topBar.addView(TextView(ctx).apply {
+        text = "⚙️ Ayarlar"
+        textSize = 18f
+        setTypeface(null, android.graphics.Typeface.BOLD)
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF1A1A2E.toInt())
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    })
+    rootLayout.addView(topBar)
+
+    val scrollView = ScrollView(ctx).apply {
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        )
+    }
     val layout = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         setPadding((12*dp).toInt(), (8*dp).toInt(), (12*dp).toInt(), (16*dp).toInt())
     }
     scrollView.addView(layout)
-
+    rootLayout.addView(scrollView)
     // ═══════════════════════════════════════════════════════════════════════
     // BÖLÜM 1: MODEL PARAMETRELERİ
     // ═══════════════════════════════════════════════════════════════════════
