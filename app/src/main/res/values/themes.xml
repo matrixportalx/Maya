@@ -40,7 +40,7 @@
     <style name="Theme.AiChatSample" parent="Base.Theme.AiChatSample" />
 
     <!-- Yuvarlak köşeli AlertDialog teması -->
-    <style name="Maya.AlertDialog" parent="Theme.Material.Light.Dialog">
+    <style name="Maya.AlertDialog" parent="ThemeOverlay.Material3.Dialogg">
         <item name="android:windowBackground">@drawable/bg_dialog_rounded</item>
         <item name="android:backgroundDimAmount">0.6</item>
     </style>
