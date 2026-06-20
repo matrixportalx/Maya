@@ -543,6 +543,13 @@ internal fun MainActivity.showSettingsDialog() {
         setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF1A1A2E.toInt())
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
     })
+    topBar.addView(android.widget.ImageButton(ctx).apply {
+        setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+        background = null
+        setColorFilter(if (isDark) 0xFFE0E0E0.toInt() else 0xFF1A1A2E.toInt())
+        layoutParams = LinearLayout.LayoutParams((40*dp).toInt(), (40*dp).toInt())
+        setOnClickListener { dialogRef?.dismiss() }
+    })  
     rootLayout.addView(topBar)
 
     val scrollView = ScrollView(ctx).apply {
