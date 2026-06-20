@@ -159,9 +159,9 @@ internal fun MainActivity.generateCharacterComment(
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
             val tokenFlow = if (impl != null) {
-                 impl.sendBypassPrompt(prompt, 200)
+                 impl.sendBypassPrompt(prompt, 400)
             } else {
-                engine.sendUserPrompt(prompt, predictLength = 200)
+                engine.sendUserPrompt(prompt, predictLength = 400)
             }
             tokenFlow.collect { sb.append(it) }
 
