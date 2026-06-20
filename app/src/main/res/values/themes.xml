@@ -34,7 +34,7 @@
         <item name="android:textColorHint">@color/light_text_hint</item>
 
         <!-- Dialog köşelerini yuvarlatmak için özel dialog teması -->
-        <item name="alertDialogTheme">@style/Maya.AlertDialog</item>
+        <item name="android:alertDialogTheme">@style/Maya.AlertDialog</item>
     </style>
 
     <style name="Theme.AiChatSample" parent="Base.Theme.AiChatSample" />
