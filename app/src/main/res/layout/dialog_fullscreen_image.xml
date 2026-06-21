@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <!-- Üst bar: Paylaş / Galeriye Kaydet / Kapat -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|end"
+        android:background="#1A1A1A"
+        android:paddingEnd="4dp"
+        android:elevation="4dp">
+
+        <ImageButton
+            android:id="@+id/btn_fs_share"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_share"
+            android:contentDescription="Paylaş"
+            android:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_fs_save"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_save"
+            android:contentDescription="Galeriye Kaydet"
+            android:tint="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_fs_close"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="Kapat"
+            android:tint="#FFFFFF" />
+
+    </LinearLayout>
+
+    <!-- Görüntü alanı: kalan tüm alanı kaplar, ortalanır -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#000000">
+
+        <tr.maya.ZoomableImageView
+            android:id="@+id/fs_image_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </FrameLayout>
+
+</LinearLayout>
