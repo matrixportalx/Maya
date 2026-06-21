@@ -24,6 +24,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import tr.maya.data.AppDatabase
 import java.io.File
+import android.app.Dialog
+import android.widget.ImageButton
 
 class MayagramActivity : AppCompatActivity() {
 
