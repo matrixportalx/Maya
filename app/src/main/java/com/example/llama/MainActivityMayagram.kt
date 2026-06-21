@@ -56,9 +56,9 @@ internal fun MainActivity.generateMayagramPost(
             try {
                 val impl = engine as? InferenceEngineImpl
                 val tokenFlow = if (impl != null) {
-                    impl.sendBypassPrompt(fullPrompt, 700)
+                    impl.sendBypassPrompt(fullPrompt, 200)
                 } else {
-                    engine.sendUserPrompt(fullPrompt, predictLength = 700)
+                    engine.sendUserPrompt(fullPrompt, predictLength = 200)
                 }
                 tokenFlow.collect { token ->
                     sb.append(token)
@@ -159,9 +159,9 @@ internal fun MainActivity.generateCharacterComment(
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
             val tokenFlow = if (impl != null) {
-                 impl.sendBypassPrompt(prompt, 400)
+                 impl.sendBypassPrompt(prompt, 100)
             } else {
-                engine.sendUserPrompt(prompt, predictLength = 400)
+                engine.sendUserPrompt(prompt, predictLength = 100)
             }
             tokenFlow.collect { sb.append(it) }
 
