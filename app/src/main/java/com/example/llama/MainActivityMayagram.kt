@@ -46,7 +46,7 @@ internal fun MainActivity.generateMayagramPost(
                 appendLine()
                 appendLine("Bir sosyal medya gönderisi hazırla. TAM OLARAK şu formatta yanıt ver (başka hiçbir şey yazma, açıklama yapma):")
                 appendLine()
-                appendLine("CAPTION: <gönderi metni, emoji ve hashtag dahil, en fazla 3-7 cümle>")
+                appendLine("CAPTION: <gönderi metni, emoji ve hashtag dahil, en fazla 4 cümle>")
                 append("IMAGE_PROMPT: <İngilizce, görüntü üretim modeli için ayrıntılı sahne tarifi, max 25 kelime>")
             }
 
@@ -56,9 +56,9 @@ internal fun MainActivity.generateMayagramPost(
             try {
                 val impl = engine as? InferenceEngineImpl
                 val tokenFlow = if (impl != null) {
-                    impl.sendBypassPrompt(fullPrompt, 200)
+                    impl.sendBypassPrompt(fullPrompt, 250)
                 } else {
-                    engine.sendUserPrompt(fullPrompt, predictLength = 200)
+                    engine.sendUserPrompt(fullPrompt, predictLength = 250)
                 }
                 tokenFlow.collect { token ->
                     sb.append(token)
