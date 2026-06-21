@@ -359,13 +359,12 @@ class MayagramActivity : AppCompatActivity() {
     val screenWidth = resources.displayMetrics.widthPixels
     val targetWidth = (screenWidth * 0.85f).toInt()
 
-    val iv = ImageView(this).apply {
+    val targetHeight = (resources.displayMetrics.heightPixels * 0.6f).toInt()
+    val iv = ZoomableImageView(this).apply {
         setImageBitmap(bmp)
-        scaleType = ImageView.ScaleType.FIT_CENTER
-        adjustViewBounds = true
         layoutParams = LinearLayout.LayoutParams(
             targetWidth,
-            LinearLayout.LayoutParams.WRAP_CONTENT
+            targetHeight
         )
     }
     val container = LinearLayout(this).apply {
