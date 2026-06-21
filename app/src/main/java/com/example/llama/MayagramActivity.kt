@@ -351,36 +351,32 @@ class MayagramActivity : AppCompatActivity() {
     // ── Tam ekran görüntü ─────────────────────────────────────────────────────
 
     private fun showFullImage(imagePath: String) {
-    val bmp = BitmapFactory.decodeFile(imagePath) ?: run {
-        Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
-        return
-    }
-    val dp = resources.displayMetrics.density
-    val screenWidth = resources.displayMetrics.widthPixels
-    val targetWidth = (screenWidth * 0.85f).toInt()
+        val bmp = BitmapFactory.decodeFile(imagePath) ?: run {
+            Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-    val targetHeight = (resources.displayMetrics.heightPixels * 0.6f).toInt()
-    val iv = ZoomableImageView(this).apply {
-        setImageBitmap(bmp)
-        layoutParams = LinearLayout.LayoutParams(
-            targetWidth,
-            targetHeight
+        val view = layoutInflater.inflate(R.layout.dialog_fullscreen_image, null)
+        val imageView = view.findViewById<ZoomableImageView>(R.id.fs_image_view)
+        val btnShare = view.findViewById<ImageButton>(R.id.btn_fs_share)
+        val btnSave  = view.findViewById<ImageButton>(R.id.btn_fs_save)
+        val btnClose = view.findViewById<ImageButton>(R.id.btn_fs_close)
+
+        imageView.setImageBitmap(bmp)
+
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.setContentView(view)
+        dialog.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
         )
+
+        btnShare.setOnClickListener { shareImage(imagePath) }
+        btnSave.setOnClickListener { saveToGallery(imagePath) }
+        btnClose.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
     }
-    val container = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = android.view.Gravity.CENTER
-        setPadding((8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
-        addView(iv)
-    }
-    AlertDialog.Builder(this)
-        .setTitle("🖼️ Görüntü")
-        .setView(container)
-        .setPositiveButton("📤 Paylaş") { _, _ -> shareImage(imagePath) }
-        .setNeutralButton("💾 Galeriye Kaydet") { _, _ -> saveToGallery(imagePath) }
-        .setNegativeButton("Kapat", null)
-        .show()
-}
 
     private fun shareImage(imagePath: String) {
         try {
