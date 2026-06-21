@@ -47,7 +47,7 @@ internal fun MainActivity.generateMayagramPost(
                 appendLine("Bir sosyal medya gönderisi hazırla. TAM OLARAK şu formatta yanıt ver (başka hiçbir şey yazma, açıklama yapma):")
                 appendLine()
                 appendLine("CAPTION: <gönderi metni, emoji ve hashtag dahil, max 4 cümle>")
-                append("IMAGE_PROMPT: <İngilizce, görüntü üretim modeli için ayrıntılı sahne tarifi, max 25 kelime>")
+                append("IMAGE_PROMPT: <İngilizce, görüntü üretim modeli için ayrıntılı sahne tarifi, max 20 kelime>")
             }
 
             val fullPrompt = buildMayagramPrompt(systemInstr)
