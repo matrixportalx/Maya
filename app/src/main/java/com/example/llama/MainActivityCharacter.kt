@@ -176,7 +176,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(emojiField)
 
     layout.addView(label("Karakter adı ({{char}})"))
-    val nameField = field("Asistan", existing?.name ?: "")
+    val nameField = field("Maya", existing?.name ?: "")
     layout.addView(nameField)
 
     layout.addView(label("Kullanıcı adı ({{user}})"))
@@ -191,10 +191,10 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
         .setTitle(if (isNew) "➕ Yeni Karakter" else "✏️ Karakteri Düzenle")
         .setView(scrollView)
         .setPositiveButton("Kaydet") { _, _ ->
-            val emoji   = emojiField.text.toString().trim().ifEmpty { "🤖" }
-            val name    = nameField.text.toString().trim().ifEmpty { "Asistan" }
+            val emoji   = emojiField.text.toString().trim().ifEmpty { "👩‍🦰" }
+            val name    = nameField.text.toString().trim().ifEmpty { "Maya" }
             val uName   = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
-            val prompt  = promptField.text.toString().trim()
+            val prompt  = promptField.text.toString().trim().ifEmpty { "{{date}} {{time}}. Senin adın {{char}}. Sen yararlı, zeki ve eğlenceli bir yapay zeka asistansın ve {{user}}'ın sadık bir dostusun." }
 
             val char = MayaCharacter(
                 id = existing?.id ?: UUID.randomUUID().toString(),
