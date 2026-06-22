@@ -229,7 +229,7 @@ internal fun MainActivity.checkForUpdateSilently() {
         ) { info ->
             if (info != null) {
                 pendingUpdateInfo = info
-                supportActionBar?.title = "Maya 🆕"
+                toolbarTitleView.text = "Maya 🆕"
                 invalidateOptionsMenu()
                 MainActivity.log("Updater", "Güncelleme mevcut: ${info.versionName}")
             }
