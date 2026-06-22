@@ -36,17 +36,33 @@ internal fun MainActivity.setupCharacters() {
     characterAdapter.activeId = activeCharacterId
     characterAdapter.submitList(characters.toList())
 
-    btnAddCharacter.setOnClickListener { showCharacterEditDialog(null) }
+    btnAddCharacter.setOnClickListener { showAddCharacterChoiceDialog() }
+}
+
+/**
+ * "+ Ekle" butonuna basıldığında: manuel oluştur ya da Tavern kartı içe aktar seçimi.
+ */
+internal fun MainActivity.showAddCharacterChoiceDialog() {
+    android.app.AlertDialog.Builder(this)
+        .setTitle("Yeni Karakter")
+        .setItems(arrayOf("✏️ Manuel Oluştur", "🃏 Tavern Kartı İçe Aktar (.png)")) { _, which ->
+            when (which) {
+                0 -> showCharacterEditDialog(null)
+                1 -> pickTavernCardFile()
+            }
+        }
+        .setNegativeButton("İptal", null).show()
 }
 
 internal fun MainActivity.showCharacterOptionsDialog(char: MayaCharacter) {
-    val options = mutableListOf("✏️ Düzenle")
+    val options = mutableListOf("✏️ Düzenle", "🃏 Tavern Kartı Olarak Dışa Aktar")
     if (characters.size > 1) options.add("🗑️ Sil")
     android.app.AlertDialog.Builder(this)
         .setTitle("${char.emoji} ${char.name}")
         .setItems(options.toTypedArray()) { _, which ->
             when (options[which]) {
                 "✏️ Düzenle" -> showCharacterEditDialog(char)
+                "🃏 Tavern Kartı Olarak Dışa Aktar" -> exportCharacterAsTavernCard(char)
                 "🗑️ Sil"    -> confirmDeleteCharacter(char)
             }
         }
@@ -107,7 +123,13 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
         }
         if (uriStr != null) {
             try {
-                val bmp = loadRoundedBitmap(Uri.parse(uriStr), (72 * dp).toInt())
+                // İçe aktarılan tavern avatarları (cacheDir dosya yolu) "file:" işaretçisiyle başlar
+                val bmp = if (uriStr.startsWith("file:")) {
+                    val path = uriStr.removePrefix("file:")
+                    BitmapFactory.decodeFile(path)?.let { raw -> roundBitmap(raw, (72 * dp).toInt()) }
+                } else {
+                    loadRoundedBitmap(Uri.parse(uriStr), (72 * dp).toInt())
+                }
                 if (bmp != null) {
                     avatarPreview.setImageBitmap(bmp)
                     return
@@ -300,25 +322,31 @@ internal fun MainActivity.loadRoundedBitmap(uri: Uri, sizePx: Int): Bitmap? {
         val raw = BitmapFactory.decodeStream(input)
         input.close()
         raw ?: return null
-
-        val size = raw.width.coerceAtMost(raw.height)
-        val x = (raw.width - size) / 2
-        val y = (raw.height - size) / 2
-        val cropped = Bitmap.createBitmap(raw, x, y, size, size)
-        val scaled = Bitmap.createScaledBitmap(cropped, sizePx, sizePx, true)
-
-        // Yuvarlak maske uygula
-        val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(output)
-        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-        canvas.drawOval(
-            android.graphics.RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat()),
-            paint
-        )
-        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(scaled, 0f, 0f, paint)
-        output
+        roundBitmap(raw, sizePx)
     } catch (_: Exception) { null }
+}
+
+/**
+ * Halihazırda elde edilmiş bir Bitmap'i yuvarlak hale getirir (URI gerektirmez).
+ * Tavern kartı içe aktarımında doğrudan decode edilen bitmap'ler için kullanılır.
+ */
+internal fun roundBitmap(raw: Bitmap, sizePx: Int): Bitmap {
+    val size = raw.width.coerceAtMost(raw.height)
+    val x = (raw.width - size) / 2
+    val y = (raw.height - size) / 2
+    val cropped = Bitmap.createBitmap(raw, x, y, size, size)
+    val scaled = Bitmap.createScaledBitmap(cropped, sizePx, sizePx, true)
+
+    val output = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(output)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    canvas.drawOval(
+        android.graphics.RectF(0f, 0f, sizePx.toFloat(), sizePx.toFloat()),
+        paint
+    )
+    paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+    canvas.drawBitmap(scaled, 0f, 0f, paint)
+    return output
 }
 
 // ── Karakter yardımcıları ─────────────────────────────────────────────────────
@@ -424,6 +452,7 @@ internal fun MainActivity.stripCharPrefix(text: String): String {
  *  - null                         → emoji göster (ImageView gizlenir)
  *  - "drawable:maya_default_avatar" → gömülü Maya fotoğrafı
  *  - "content://..."              → galeriden seçilmiş fotoğraf
+ *  - "file:/data/.../xyz.png"     → içe aktarılan tavern kartı avatarı (cacheDir dosyası)
  *
  * ImageView ve emoji TextView referansları verilir, uygun olanı gösterir.
  */
@@ -441,7 +470,14 @@ internal fun MainActivity.bindCharacterAvatar(
             textView.visibility = android.view.View.GONE
         }
         avatarUri != null -> {
-            val bmp = try { loadRoundedBitmap(Uri.parse(avatarUri), sizePx) } catch (_: Exception) { null }
+            val bmp = try {
+                if (avatarUri.startsWith("file:")) {
+                    BitmapFactory.decodeFile(avatarUri.removePrefix("file:"))
+                        ?.let { roundBitmap(it, sizePx) }
+                } else {
+                    loadRoundedBitmap(Uri.parse(avatarUri), sizePx)
+                }
+            } catch (_: Exception) { null }
             if (bmp != null) {
                 imageView.setImageBitmap(bmp)
                 imageView.visibility = android.view.View.VISIBLE
@@ -456,6 +492,233 @@ internal fun MainActivity.bindCharacterAvatar(
             imageView.visibility = android.view.View.GONE
             textView.visibility = android.view.View.VISIBLE
             textView.text = emoji
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ── Tavern Kartı İçe/Dışa Aktarma ────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+
+/** Karakter avatarlarının kalıcı olarak saklandığı dizin (galeri izni gerektirmez). */
+internal fun MainActivity.getCharacterAvatarsDir(): File {
+    val dir = File(filesDir, "character_avatars")
+    if (!dir.exists()) dir.mkdirs()
+    return dir
+}
+
+/** Sistem dosya seçiciyi açar (.png seçimi için). */
+internal fun MainActivity.pickTavernCardFile() {
+    tavernCardPickerLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        addCategory(Intent.CATEGORY_OPENABLE)
+        type = "image/png"
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    })
+}
+
+/**
+ * Seçilen tavern kartı PNG'sini işler: JSON'u çıkarır, avatarı içe kopyalar,
+ * "Review Imported Card" tarzı bir önizleme/düzenleme diyaloğu açar.
+ */
+internal fun MainActivity.handleTavernCardSelected(uri: Uri) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val pngBytes = contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: throw Exception("Dosya okunamadı")
+
+            val card = TavernCardParser.readCardFromBytes(pngBytes)
+            val systemPrompt = TavernCardParser.buildSystemPrompt(card)
+
+            // Avatarı (PNG'nin kendisi) cacheDir/character_avatars içine kopyala
+            val avatarsDir = getCharacterAvatarsDir()
+            val avatarFile = File(avatarsDir, "tavern_${UUID.randomUUID()}.png")
+            FileOutputStream(avatarFile).use { out -> out.write(pngBytes) }
+
+            withContext(Dispatchers.Main) {
+                showTavernImportReviewDialog(card, systemPrompt, avatarFile)
+            }
+        } catch (e: TavernCardParser.InvalidCardException) {
+            withContext(Dispatchers.Main) {
+                android.app.AlertDialog.Builder(this@handleTavernCardSelected)
+                    .setTitle("❌ Kart Okunamadı")
+                    .setMessage("${e.message}\n\nBu dosya bir Tavern/SillyTavern karakter kartı (.png) olmayabilir.")
+                    .setPositiveButton("Tamam", null).show()
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@handleTavernCardSelected, "İçe aktarma hatası: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+/**
+ * Ekran görüntüsündeki "Review Imported Card" akışına benzer önizleme diyaloğu.
+ * Kullanıcı isim/sistem promptunu düzenleyip "Oluştur" diyebilir.
+ */
+internal fun MainActivity.showTavernImportReviewDialog(
+    card: TavernCardParser.TavernCardData,
+    initialSystemPrompt: String,
+    avatarFile: File
+) {
+    val dp = resources.displayMetrics.density
+    val isDark = MessageAdapter.isDarkTheme(this)
+
+    val scrollView = ScrollView(this)
+    val layout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((20*dp).toInt(), (16*dp).toInt(), (20*dp).toInt(), (8*dp).toInt())
+    }
+    scrollView.addView(layout)
+
+    // Avatar önizleme
+    val avatarPreview = android.widget.ImageView(this).apply {
+        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        layoutParams = LinearLayout.LayoutParams((96*dp).toInt(), (96*dp).toInt()).apply {
+            gravity = android.view.Gravity.CENTER_HORIZONTAL
+            bottomMargin = (12*dp).toInt()
+        }
+        clipToOutline = true
+        background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            setColor(0xFF2E2E4A.toInt())
+        }
+    }
+    val bmp = BitmapFactory.decodeFile(avatarFile.absolutePath)?.let { roundBitmap(it, (96*dp).toInt()) }
+    if (bmp != null) avatarPreview.setImageBitmap(bmp)
+    val avatarHolder = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        gravity = android.view.Gravity.CENTER
+    }
+    avatarHolder.addView(avatarPreview)
+    layout.addView(avatarHolder)
+
+    fun label(text: String) = TextView(this).apply {
+        this.text = text; textSize = 12f; alpha = 0.7f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (8*dp).toInt(); bottomMargin = (2*dp).toInt() }
+    }
+    fun field(value: String, multiLine: Boolean = false) = android.widget.EditText(this).apply {
+        setText(value)
+        if (multiLine) { minLines = 4; maxLines = 12; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+
+    layout.addView(label("Karakter adı ({{char}})"))
+    val nameField = field(card.name)
+    layout.addView(nameField)
+
+    layout.addView(label("Kullanıcı adı ({{user}})"))
+    val userNameField = field(userName)
+    layout.addView(userNameField)
+
+    layout.addView(label("Sistem promptu (description + personality + scenario birleştirildi — düzenleyebilirsiniz)"))
+    val promptField = field(initialSystemPrompt, multiLine = true)
+    layout.addView(promptField)
+
+    if (card.firstMessage.isNotBlank()) {
+        layout.addView(TextView(this).apply {
+            text = "ℹ️ Bu karttaki \"İlk Mesaj\" alanı henüz otomatik eklenmiyor:\n\n\"${card.firstMessage.take(200)}${if (card.firstMessage.length > 200) "…" else ""}\""
+            textSize = 11f; alpha = 0.6f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (10*dp).toInt() }
+        })
+    }
+
+    android.app.AlertDialog.Builder(this)
+        .setTitle("🃏 Kartı Gözden Geçir")
+        .setView(scrollView)
+        .setPositiveButton("Oluştur") { _, _ ->
+            val name = nameField.text.toString().trim().ifEmpty { "İçe Aktarılan Karakter" }
+            val uName = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
+            val prompt = promptField.text.toString().trim()
+
+            val newChar = MayaCharacter(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                userName = uName,
+                emoji = "🃏",
+                systemPrompt = prompt,
+                avatarUri = "file:${avatarFile.absolutePath}"
+            )
+            characters.add(newChar)
+            saveCharactersToPrefs(characters)
+            characterAdapter.submitList(characters.toList())
+            Toast.makeText(this, "✅ \"$name\" içe aktarıldı", Toast.LENGTH_SHORT).show()
+        }
+        .setNegativeButton("İptal") { _, _ ->
+            // Kullanıcı vazgeçti — kopyalanan avatar dosyasını temizle
+            try { avatarFile.delete() } catch (_: Exception) {}
+        }
+        .show()
+}
+
+/**
+ * Karakteri Tavern (V2) PNG kartı olarak dışa aktarır.
+ * Avatar yoksa Maya'nın varsayılan avatarını kaynak görsel olarak kullanır.
+ */
+internal fun MainActivity.exportCharacterAsTavernCard(char: MayaCharacter) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val sourcePngBytes: ByteArray = when {
+                char.avatarUri == null || char.avatarUri == MainActivity.DEFAULT_AVATAR_MARKER -> {
+                    resources.openRawResource(R.drawable.maya_default_avatar).use { it.readBytes() }
+                }
+                char.avatarUri.startsWith("file:") -> {
+                    File(char.avatarUri.removePrefix("file:")).readBytes()
+                }
+                else -> {
+                    // content:// galeri URI'si — PNG'ye dönüştürerek oku (JPEG olabilir)
+                    val bmp = contentResolver.openInputStream(Uri.parse(char.avatarUri))?.use {
+                        BitmapFactory.decodeStream(it)
+                    } ?: throw Exception("Avatar okunamadı")
+                    val baos = java.io.ByteArrayOutputStream()
+                    bmp.compress(Bitmap.CompressFormat.PNG, 100, baos)
+                    baos.toByteArray()
+                }
+            }
+
+            val cardBytes = TavernCardParser.buildCardPng(
+                sourcePngBytes = sourcePngBytes,
+                characterName = char.name,
+                userName = char.userName,
+                systemPrompt = char.systemPrompt
+            )
+
+            val safeFileName = "tavern_character_${char.name.replace(Regex("[^\\w-]"), "_")}.png"
+
+            withContext(Dispatchers.Main) {
+                pendingTavernExportBytes = cardBytes
+                tavernCardSaveLauncher.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_TITLE, safeFileName)
+                })
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@exportCharacterAsTavernCard, "Dışa aktarma hatası: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+/** tavernCardSaveLauncher sonucu çağrılır — hazırlanmış PNG bayt dizisini hedef URI'ye yazar. */
+internal fun MainActivity.writeTavernCardToUri(uri: Uri) {
+    val bytes = pendingTavernExportBytes ?: return
+    pendingTavernExportBytes = null
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            contentResolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
+                ?: throw Exception("Dosya yazılamadı")
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@writeTavernCardToUri, "✅ Karakter kartı dışa aktarıldı", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@writeTavernCardToUri, "Yazma hatası: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }
