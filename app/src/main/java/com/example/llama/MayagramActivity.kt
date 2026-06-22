@@ -36,6 +36,7 @@ class MayagramActivity : AppCompatActivity() {
     private lateinit var tvEmpty: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var tvProgressStatus: TextView
+    private lateinit var main: MainActivity
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Tema
