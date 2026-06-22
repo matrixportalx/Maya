@@ -262,38 +262,60 @@ class MayagramActivity : AppCompatActivity() {
     }
 
     // Yeni Eklenen 2. Fonksiyon: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir
-    private fun scheduleAutoReplies(post: MayagramPost, commentText: String, main: MainActivity) {
-        val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
-        val allChars = loadCharacters(prefs.getString("characters_json", null))
-        if (allChars.isEmpty()) return
+    private fun scheduleAutoReplies(post: MayagramPost, commentText: String) {
+    // Önce tüm karakterleri yükle
+    val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
+    val allChars = loadCharacters(prefs.getString("characters_json", null))
+    if (allChars.isEmpty()) {
+        MainActivity.log("Mayagram", "⚠️ Hiç karakter yok!")
+        return
+    }
 
-        // 1. Gönderinin sahibini bul
-        val postOwner = allChars.find { it.id == post.characterId }
+    // 1. Gönderi sahibini bul
+    val postOwner = allChars.find { it.id == post.characterId }
+    if (postOwner == null) {
+        MainActivity.log("Mayagram", "⚠️ Gönderi sahibi bulunamadı! ID: ${post.characterId}")
+        return
+    }
 
-        // 2. Yorumda @ ile etiketlenenleri bul (gönderi sahibini tekrar eklememek için filtrele)
-        val mentioned = extractMentionedCharacters(commentText, allChars)
-            .filter { it.id != post.characterId }
-
-        // 3. Yanıt verecekler listesini oluştur (Önce gönderi sahibi, sonra etiketlenenler)
-        val responders = mutableListOf<MayaCharacter>()
-        postOwner?.let { responders.add(it) }
-        responders.addAll(mentioned)
-        responders.distinctBy { it.id }
-
-        if (responders.isEmpty()) return
-
-        // 4. Sırayla (aralıklı) yorumları oluştur
-        lifecycleScope.launch {
-            responders.forEachIndexed { index, character ->
-                kotlinx.coroutines.delay(1200 + (index * 700L))
-                // main, bu sınıftaki Activity'dir. generateCharacterComment ile yorumu eklet.
-                main.generateCharacterComment(post, character) { comment ->
-                    // Yorum başarıyla eklendiğinde log'a yaz
-                    MainActivity.log("Mayagram", "${character.name} otomatik yanıt verdi")
-                }
+    // 2. Yorumdaki @ etiketlerini bul
+    val mentioned = mutableListOf<MayaCharacter>()
+    val words = commentText.split(" ")
+    for (word in words) {
+        if (word.startsWith("@")) {
+            val name = word.removePrefix("@").trim()
+                .replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
+            val found = allChars.find { it.name.equals(name, ignoreCase = true) }
+            if (found != null && found.id != post.characterId) {
+                mentioned.add(found)
+                MainActivity.log("Mayagram", "✅ Etiket bulundu: ${found.name}")
             }
         }
     }
+
+    // 3. Yanıt verecekler listesi (önce gönderi sahibi, sonra etiketlenenler)
+    val responders = mutableListOf(postOwner)
+    responders.addAll(mentioned.distinctBy { it.id })
+
+    MainActivity.log("Mayagram", "📢 Yanıt verecekler: ${responders.joinToString { it.name }}")
+
+    // 4. Sırayla yorum yaptır
+    lifecycleScope.launch {
+        for ((index, character) in responders.withIndex()) {
+            kotlinx.coroutines.delay(1500 + (index * 800L))
+            
+            // MainActivity'yi bul
+            val main = this@MayagramActivity as? MainActivity
+            if (main != null) {
+                main.generateCharacterComment(post, character) { comment ->
+                    MainActivity.log("Mayagram", "💬 ${character.name} yanıt verdi: ${comment.content}")
+                }
+            } else {
+                MainActivity.log("Mayagram", "❌ MainActivity bulunamadı!")
+            }
+        }
+    }
+}
 
     // ── Like ──────────────────────────────────────────────────────────────────
 
