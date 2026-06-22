@@ -375,6 +375,7 @@ class MayagramActivity : AppCompatActivity() {
                     commentAdapter.addComment(comment)
                     commentEdit.text.clear()
                     rvComments.scrollToPosition(commentAdapter.itemCount - 1)
+                    scheduleAutoReplies(post, text)
                 }
             }
         }
