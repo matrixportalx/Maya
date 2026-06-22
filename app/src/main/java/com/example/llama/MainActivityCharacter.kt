@@ -213,6 +213,14 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     val promptField = field("Karakterin kişiliğini, görevini tanımlayın...", existing?.systemPrompt ?: "", multiLine = true)
     layout.addView(promptField)
 
+    layout.addView(label("Senaryo (kullanıcıyla ilişki/bağlam — isteğe bağlı)"))
+    val scenarioField = field("Örn: Sen ve {{user}} eski arkadaşsınız...", existing?.scenario ?: "", multiLine = true)
+    layout.addView(scenarioField)
+
+    layout.addView(label("İlk mesaj (isteğe bağlı)"))
+    val firstMessageField = field("Karakterin sohbet başında söyleyeceği ilk söz...", existing?.firstMessage ?: "", multiLine = true)
+    layout.addView(firstMessageField)
+
     android.app.AlertDialog.Builder(this)
         .setTitle(if (isNew) "➕ Yeni Karakter" else "✏️ Karakteri Düzenle")
         .setView(scrollView)
@@ -221,12 +229,16 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
             val name    = nameField.text.toString().trim().ifEmpty { "Maya" }
             val uName   = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
             val prompt  = promptField.text.toString().trim().ifEmpty { "{{date}} {{time}}. Senin adın {{char}}. Sen yararlı, zeki ve eğlenceli bir yapay zeka asistansın ve {{user}}'ın sadık bir dostusun." }
+            val scenario = scenarioField.text.toString().trim()
+            val firstMsg = firstMessageField.text.toString().trim()
 
             val char = MayaCharacter(
                 id = existing?.id ?: UUID.randomUUID().toString(),
                 name = name, userName = uName, emoji = emoji,
                 systemPrompt = prompt,
-                avatarUri = tempAvatarUri ?: MainActivity.DEFAULT_AVATAR_MARKER
+                avatarUri = tempAvatarUri ?: MainActivity.DEFAULT_AVATAR_MARKER,
+                scenario = scenario,
+                firstMessage = firstMsg
             )
             if (isNew) {
                 characters.add(char)
@@ -364,7 +376,9 @@ internal fun MainActivity.loadCharactersFromPrefs(): List<MayaCharacter> {
                 userName = obj.optString("user_name", "Kullanıcı"),
                 emoji = obj.optString("emoji", "🤖"),
                 systemPrompt = obj.optString("system_prompt", ""),
-                avatarUri = obj.optString("avatar_uri", "").ifEmpty { null }
+                avatarUri = obj.optString("avatar_uri", "").ifEmpty { null },
+                scenario = obj.optString("scenario", ""),
+                firstMessage = obj.optString("first_message", "")
             )
         }
     } catch (e: Exception) { emptyList() }
@@ -378,6 +392,8 @@ internal fun MainActivity.saveCharactersToPrefs(list: List<MayaCharacter>) {
             put("user_name", char.userName); put("emoji", char.emoji)
             put("system_prompt", char.systemPrompt)
             put("avatar_uri", char.avatarUri ?: "")
+            put("scenario", char.scenario)
+            put("first_message", char.firstMessage)
         })
     }
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
@@ -614,17 +630,17 @@ internal fun MainActivity.showTavernImportReviewDialog(
     val userNameField = field(userName)
     layout.addView(userNameField)
 
-    layout.addView(label("Sistem promptu (description + personality + scenario birleştirildi — düzenleyebilirsiniz)"))
+    layout.addView(label("Sistem promptu (description + personality + örnek konuşma birleştirildi — düzenleyebilirsiniz)"))
     val promptField = field(initialSystemPrompt, multiLine = true)
     layout.addView(promptField)
 
-    if (card.firstMessage.isNotBlank()) {
-        layout.addView(TextView(this).apply {
-            text = "ℹ️ Bu karttaki \"İlk Mesaj\" alanı henüz otomatik eklenmiyor:\n\n\"${card.firstMessage.take(200)}${if (card.firstMessage.length > 200) "…" else ""}\""
-            textSize = 11f; alpha = 0.6f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (10*dp).toInt() }
-        })
-    }
+    layout.addView(label("Senaryo (kullanıcıyla ilişki/bağlam)"))
+    val scenarioField = field(card.scenario, multiLine = true)
+    layout.addView(scenarioField)
+
+    layout.addView(label("İlk mesaj"))
+    val firstMessageField = field(card.firstMessage, multiLine = true)
+    layout.addView(firstMessageField)
 
     android.app.AlertDialog.Builder(this)
         .setTitle("🃏 Kartı Gözden Geçir")
@@ -633,6 +649,8 @@ internal fun MainActivity.showTavernImportReviewDialog(
             val name = nameField.text.toString().trim().ifEmpty { "İçe Aktarılan Karakter" }
             val uName = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
             val prompt = promptField.text.toString().trim()
+            val scenario = scenarioField.text.toString().trim()
+            val firstMsg = firstMessageField.text.toString().trim()
 
             val newChar = MayaCharacter(
                 id = UUID.randomUUID().toString(),
@@ -640,7 +658,9 @@ internal fun MainActivity.showTavernImportReviewDialog(
                 userName = uName,
                 emoji = "🃏",
                 systemPrompt = prompt,
-                avatarUri = "file:${avatarFile.absolutePath}"
+                avatarUri = "file:${avatarFile.absolutePath}",
+                scenario = scenario,
+                firstMessage = firstMsg
             )
             characters.add(newChar)
             saveCharactersToPrefs(characters)
@@ -683,7 +703,9 @@ internal fun MainActivity.exportCharacterAsTavernCard(char: MayaCharacter) {
                 sourcePngBytes = sourcePngBytes,
                 characterName = char.name,
                 userName = char.userName,
-                systemPrompt = char.systemPrompt
+                systemPrompt = char.systemPrompt,
+                scenario = char.scenario,
+                firstMessage = char.firstMessage
             )
 
             val safeFileName = "tavern_character_${char.name.replace(Regex("[^\\w-]"), "_")}.png"
