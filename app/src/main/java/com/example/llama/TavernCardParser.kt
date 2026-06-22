@@ -163,15 +163,15 @@ object TavernCardParser {
      * Verilen kaynak PNG bayt dizisine (avatar resmi) "chara" tEXt chunk'ı ekleyerek
      * yeni bir tavern kartı PNG'si üretir.
      *
-     * Maya'nın systemPrompt alanı V1/V2 formatındaki "description" alanına yazılır;
-     * scenario ve firstMessage ayrı tutulan gerçek alanlardır — diğer tavern-uyumlu
-     * uygulamalarda da doğru bölümlerde görünürler.
+     * description, personality, scenario, firstMessage Maya'nın MayaCharacter alanlarıyla
+     * birebir eşleşir — diğer tavern-uyumlu uygulamalarda doğru bölümlerde görünürler.
      */
     fun buildCardPng(
         sourcePngBytes: ByteArray,
         characterName: String,
         userName: String,
-        systemPrompt: String,
+        description: String,
+        personality: String = "",
         scenario: String = "",
         firstMessage: String = ""
     ): ByteArray {
@@ -184,8 +184,8 @@ object TavernCardParser {
             put("spec_version", "2.0")
             put("data", JSONObject().apply {
                 put("name", characterName)
-                put("description", systemPrompt)
-                put("personality", "")
+                put("description", description)
+                put("personality", personality)
                 put("scenario", scenario)
                 put("first_mes", firstMessage)
                 put("mes_example", "")
