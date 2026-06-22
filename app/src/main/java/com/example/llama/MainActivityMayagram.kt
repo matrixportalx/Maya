@@ -40,7 +40,11 @@ internal fun MainActivity.generateMayagramPost(
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
 
             val systemInstr = buildString {
-                appendLine("Sen ${character.name} karakterisin. ${character.systemPrompt}")
+            val charPrompt = character.systemPrompt.ifEmpty {
+                listOf(character.description, character.personality, character.scenario)
+                    .filter { it.isNotBlank() }.joinToString(". ")
+            }
+            appendLine("Sen ${character.name} karakterisin. ${charPrompt}")
                 appendLine()
                 if (topicLine.isNotBlank()) appendLine(topicLine)
                 appendLine()
