@@ -129,7 +129,10 @@ object TavernCardParser {
         )
     }
 
-    /** TavernCardData'dan Maya'nın tek-blok sistem promptunu oluşturur. */
+    /**
+     * TavernCardData'dan Maya'nın sistem promptu (description + personality + mesExample) metnini oluşturur.
+     * NOT: "scenario" buraya dahil edilmez — Maya'da ayrı bir alan olarak saklanır (MayaCharacter.scenario).
+     */
     fun buildSystemPrompt(card: TavernCardData): String {
         return buildString {
             if (card.systemPromptRaw.isNotBlank()) {
@@ -143,11 +146,6 @@ object TavernCardParser {
             if (card.personality.isNotBlank()) {
                 append("Kişilik: ")
                 append(card.personality.trim())
-                appendLine(); appendLine()
-            }
-            if (card.scenario.isNotBlank()) {
-                append("Senaryo: ")
-                append(card.scenario.trim())
                 appendLine(); appendLine()
             }
             if (card.mesExample.isNotBlank()) {
@@ -165,15 +163,17 @@ object TavernCardParser {
      * Verilen kaynak PNG bayt dizisine (avatar resmi) "chara" tEXt chunk'ı ekleyerek
      * yeni bir tavern kartı PNG'si üretir.
      *
-     * Not: Maya'nın tek sistem promptu alanı V1 formatındaki "description" alanına
-     * tam olarak yazılır; "personality", "scenario" boş bırakılır (Maya bunları
-     * ayrı tutmuyor). Bu, kartın başka tavern-uyumlu uygulamalarda da okunabilmesini sağlar.
+     * Maya'nın systemPrompt alanı V1/V2 formatındaki "description" alanına yazılır;
+     * scenario ve firstMessage ayrı tutulan gerçek alanlardır — diğer tavern-uyumlu
+     * uygulamalarda da doğru bölümlerde görünürler.
      */
     fun buildCardPng(
         sourcePngBytes: ByteArray,
         characterName: String,
         userName: String,
-        systemPrompt: String
+        systemPrompt: String,
+        scenario: String = "",
+        firstMessage: String = ""
     ): ByteArray {
         if (sourcePngBytes.size < 8 || !sourcePngBytes.copyOfRange(0, 8).contentEquals(PNG_MAGIC)) {
             throw InvalidCardException("Kaynak avatar geçerli bir PNG değil")
@@ -186,8 +186,8 @@ object TavernCardParser {
                 put("name", characterName)
                 put("description", systemPrompt)
                 put("personality", "")
-                put("scenario", "")
-                put("first_mes", "")
+                put("scenario", scenario)
+                put("first_mes", firstMessage)
                 put("mes_example", "")
                 put("creator_notes", "Maya uygulamasından dışa aktarıldı")
                 put("system_prompt", "")
