@@ -204,7 +204,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
                 id = existing?.id ?: UUID.randomUUID().toString(),
                 name = name, userName = uName, emoji = emoji,
                 systemPrompt = prompt,
-                avatarUri = tempAvatarUri
+                avatarUri = tempAvatarUri ?: MainActivity.DEFAULT_AVATAR_MARKER
             )
             if (isNew) {
                 characters.add(char)
