@@ -45,6 +45,7 @@ internal fun MainActivity.bindViews() {
 internal fun MainActivity.setupToolbar() {
     setSupportActionBar(toolbar)
     supportActionBar?.setDisplayHomeAsUpEnabled(true)
+    supportActionBar?.setDisplayShowTitleEnabled(false)
 }
 
 internal fun MainActivity.setupDrawer() {
