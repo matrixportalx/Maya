@@ -43,6 +43,7 @@ import java.io.FileOutputStream
 // v6.0 - Avatar desteği: karakter ve kullanıcı için özel fotoğraf
 // v6.1 - Dream API entegrasyonu: LocalDream SSE görüntü üretimi
 // v6.2 - Mayagram: Maya karakterlerinin sosyal medya akışı
+// v6.3 - Tavern karakter kartı içe/dışa aktarma (.png)
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -245,6 +246,9 @@ class MainActivity : AppCompatActivity() {
     internal var dreamUseOpenCl: Boolean = false
     internal var dreamDefaultNegativePrompt: String = ""
 
+    // ── v6.3: Tavern kartı dışa aktarma — kaydet diyaloğu sonucu beklenen bayt dizisi ──
+    internal var pendingTavernExportBytes: ByteArray? = null
+
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as MayaForegroundService.LocalBinder
@@ -354,6 +358,26 @@ class MainActivity : AppCompatActivity() {
             result.data?.data?.let { uri ->
                 handleUserAvatarSelected(uri)
             }
+        }
+    }
+
+    /** v6.3: Tavern karakter kartı (.png) seçici — içe aktarma */
+    internal val tavernCardPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri -> handleTavernCardSelected(uri) }
+        }
+    }
+
+    /** v6.3: Tavern karakter kartı (.png) kaydetme — dışa aktarma */
+    internal val tavernCardSaveLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri -> writeTavernCardToUri(uri) }
+        } else {
+            pendingTavernExportBytes = null
         }
     }
 
