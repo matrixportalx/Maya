@@ -262,7 +262,7 @@ class MayagramActivity : AppCompatActivity() {
     }
 
     // Yeni Eklenen 2. Fonksiyon: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir
-    private fun scheduleAutoReplies(post: MayagramPost, commentText: String) {
+    private fun scheduleAutoReplies(post: MayagramPost, commentText: String, main: MainActivity) {
         val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
         val allChars = loadCharacters(prefs.getString("characters_json", null))
         if (allChars.isEmpty()) return
