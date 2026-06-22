@@ -107,6 +107,12 @@ class MayagramFeedAdapter(
         emoji: String,
         sizePx: Int
     ) {
+        if (avatarUri == "drawable:maya_default_avatar") {
+            imageView.setImageResource(R.drawable.maya_default_avatar)
+            imageView.visibility = View.VISIBLE
+            textView.visibility = View.GONE
+            return
+        }
         if (avatarUri != null) {
             val cached = bitmapCache.get(avatarUri)
             if (cached != null) {
