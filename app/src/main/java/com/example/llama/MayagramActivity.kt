@@ -285,7 +285,7 @@ class MayagramActivity : AppCompatActivity() {
         // 4. Sırayla (aralıklı) yorumları oluştur
         lifecycleScope.launch {
             responders.forEachIndexed { index, character ->
-                delay(1200 + (index * 700L)) // 1.2 saniye, 1.9 saniye, 2.6 saniye...
+                kotlinx.coroutines.delay(1200 + (index * 700L))
                 // main, bu sınıftaki Activity'dir. generateCharacterComment ile yorumu eklet.
                 main.generateCharacterComment(post, character) { comment ->
                     // Yorum başarıyla eklendiğinde log'a yaz
