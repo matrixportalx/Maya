@@ -70,19 +70,25 @@ internal fun MainActivity.loadSettings() {
     activeCharacterId = prefs.getString("active_character_id", null)
 
     if (characters.isEmpty()) {
+        val defaultName = "Maya"
+        val defaultPrompt = "{{date}} {{time}}. Senin adın {{char}}. Sen yararlı, zeki ve eğlenceli bir yapay zeka asistansın ve {{user}}'ın sadık bir dostusun."
         val default = MayaCharacter(
             id = "default",
-            name = charName,
+            name = defaultName,
             userName = userName,
-            emoji = "🤖",
-            systemPrompt = systemPrompt
+            emoji = "👩‍🦰",
+            systemPrompt = defaultPrompt,
+            avatarUri = MainActivity.DEFAULT_AVATAR_MARKER
         )
         characters.add(default)
         saveCharactersToPrefs(characters)
         activeCharacterId = "default"
         prefs.edit().putString("active_character_id", "default").apply()
+        charName = defaultName
+        userName = userName
+        systemPrompt = defaultPrompt
     }
-
+    
     applyActiveCharacterValues()
 
     // ── v6.0: Aktif karakterin avatar URI'sini adapter'a aktar ───────────────
