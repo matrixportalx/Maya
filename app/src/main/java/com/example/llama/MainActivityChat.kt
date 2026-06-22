@@ -185,16 +185,16 @@ private fun MainActivity.continueWithWebSearch(
 
         if (shouldSearch) {
             lifecycleScope.launch {
-                val savedTitle = supportActionBar?.title?.toString() ?: ""
+                val savedTitle = toolbarTitleView.text.toString()
                 val searchQuery = when (webSearchQueryMode) {
                     "smart"  -> extractSmartQuery(msgText)
                     else     -> extractSimpleQuery(msgText)
                 }
                 MainActivity.log("Maya", "Arama sorgusu (mod=$webSearchQueryMode): \"$searchQuery\"")
 
-                supportActionBar?.title = "🔍 Aranıyor: ${searchQuery.take(30)}…"
+                toolbarTitleView.text = "🔍 Aranıyor: ${searchQuery.take(30)}…"
                 val searchResults = withContext(Dispatchers.IO) { performWebSearch(searchQuery) }
-                supportActionBar?.title = savedTitle
+                toolbarTitleView.text = savedTitle
 
                 val messagesToSend = if (searchResults.isNotEmpty()) {
                     lastWebSearchResults = searchResults
