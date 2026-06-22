@@ -130,6 +130,10 @@ class MainActivity : AppCompatActivity() {
     internal lateinit var drawerLayout: DrawerLayout
     internal var selectedTemplate: Int = 0
     internal lateinit var toolbar: Toolbar
+    internal lateinit var toolbarAvatarImage: android.widget.ImageView
+    internal lateinit var toolbarAvatarEmoji: android.widget.TextView
+    internal lateinit var toolbarTitleView: android.widget.TextView
+    internal lateinit var toolbarSubtitleView: android.widget.TextView
     internal lateinit var messagesRv: RecyclerView
     internal lateinit var messageInput: android.widget.EditText
     internal lateinit var fab: FloatingActionButton
