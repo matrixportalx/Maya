@@ -151,7 +151,6 @@ internal fun MainActivity.updateToolbarTitle(title: String) { toolbarTitleView.t
 internal fun MainActivity.updateActiveModelSubtitle() {
     val modelName = loadedModelPath?.let { MainActivity.entryDisplayName(it) } ?: "Model yüklü değil"
     val activeChar = characters.find { it.id == activeCharacterId }
-    val charStr = if (activeChar != null) "${activeChar.emoji} ${activeChar.name}  •  " else ""
     val impl = engine as? com.arm.aichat.internal.InferenceEngineImpl
     val visionStr = if (impl?.isMmprojLoaded == true) "  📷" else ""
     val searchStr = when (webSearchMode) {
@@ -159,7 +158,56 @@ internal fun MainActivity.updateActiveModelSubtitle() {
         "always"  -> "  🌐"
         else      -> ""
     }
-    supportActionBar?.subtitle = "$charStr$modelName$visionStr$searchStr"
+
+    val dp = resources.displayMetrics.density
+    val sizePx = (36 * dp).toInt()
+
+    if (activeChar != null) {
+        bindToolbarAvatar(activeChar.avatarUri, activeChar.emoji, sizePx)
+        toolbarSubtitleView.text = "$modelName$visionStr$searchStr"
+        toolbarSubtitleView.visibility = android.view.View.VISIBLE
+    } else {
+        toolbarAvatarImage.visibility = android.view.View.GONE
+        toolbarAvatarEmoji.visibility = android.view.View.GONE
+        toolbarSubtitleView.text = "$modelName$visionStr$searchStr"
+        toolbarSubtitleView.visibility = android.view.View.VISIBLE
+    }
+}
+
+/**
+ * Toolbar'daki küçük avatar alanını günceller.
+ * avatarUri == "drawable:maya_default_avatar" → gömülü Maya fotoğrafı
+ * avatarUri == content:// URI                  → kullanıcının seçtiği fotoğraf (arka planda yüklenir)
+ * avatarUri == null                            → emoji
+ */
+internal fun MainActivity.bindToolbarAvatar(avatarUri: String?, emoji: String, sizePx: Int) {
+    when {
+        avatarUri == "drawable:maya_default_avatar" -> {
+            toolbarAvatarImage.setImageResource(R.drawable.maya_default_avatar)
+            toolbarAvatarImage.visibility = android.view.View.VISIBLE
+            toolbarAvatarEmoji.visibility = android.view.View.GONE
+        }
+        avatarUri != null -> {
+            toolbarAvatarImage.visibility = android.view.View.GONE
+            toolbarAvatarEmoji.text = emoji
+            toolbarAvatarEmoji.visibility = android.view.View.VISIBLE
+            Thread {
+                val bmp = try { loadRoundedBitmap(android.net.Uri.parse(avatarUri), sizePx) } catch (_: Exception) { null }
+                if (bmp != null) {
+                    runOnUiThread {
+                        toolbarAvatarImage.setImageBitmap(bmp)
+                        toolbarAvatarImage.visibility = android.view.View.VISIBLE
+                        toolbarAvatarEmoji.visibility = android.view.View.GONE
+                    }
+                }
+            }.start()
+        }
+        else -> {
+            toolbarAvatarImage.visibility = android.view.View.GONE
+            toolbarAvatarEmoji.text = emoji
+            toolbarAvatarEmoji.visibility = android.view.View.VISIBLE
+        }
+    }
 }
 
 // ── Güncelleme kontrolü ───────────────────────────────────────────────────────
