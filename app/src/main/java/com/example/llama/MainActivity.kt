@@ -113,6 +113,10 @@ class MainActivity : AppCompatActivity() {
         const val THEME_DARK   = 1
         const val THEME_LIGHT  = 2
 
+        // ── Varsayılan Maya avatarı (gömülü drawable) için özel işaretçi ────────
+        // avatarUri alanında normal galeri URI'leri "content://..." şeklindeyken,
+        // bu özel string drawable/maya_default_avatar.png'yi işaret eder.
+        const val DEFAULT_AVATAR_MARKER = "drawable:maya_default_avatar"
         fun applyThemeMode(mode: Int) {
             val nightMode = when (mode) {
                 THEME_DARK  -> AppCompatDelegate.MODE_NIGHT_YES
