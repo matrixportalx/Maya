@@ -416,3 +416,46 @@ internal fun MainActivity.stripCharPrefix(text: String): String {
         else -> text
     }
 }
+
+// ── Avatar görüntüleme yardımcısı (gömülü varsayılan + galeri URI ortak noktası) ──
+
+/**
+ * avatarUri alanını yorumlar:
+ *  - null                         → emoji göster (ImageView gizlenir)
+ *  - "drawable:maya_default_avatar" → gömülü Maya fotoğrafı
+ *  - "content://..."              → galeriden seçilmiş fotoğraf
+ *
+ * ImageView ve emoji TextView referansları verilir, uygun olanı gösterir.
+ */
+internal fun MainActivity.bindCharacterAvatar(
+    imageView: android.widget.ImageView,
+    textView: TextView,
+    avatarUri: String?,
+    emoji: String,
+    sizePx: Int
+) {
+    when {
+        avatarUri == MainActivity.DEFAULT_AVATAR_MARKER -> {
+            imageView.setImageResource(R.drawable.maya_default_avatar)
+            imageView.visibility = android.view.View.VISIBLE
+            textView.visibility = android.view.View.GONE
+        }
+        avatarUri != null -> {
+            val bmp = try { loadRoundedBitmap(Uri.parse(avatarUri), sizePx) } catch (_: Exception) { null }
+            if (bmp != null) {
+                imageView.setImageBitmap(bmp)
+                imageView.visibility = android.view.View.VISIBLE
+                textView.visibility = android.view.View.GONE
+            } else {
+                imageView.visibility = android.view.View.GONE
+                textView.visibility = android.view.View.VISIBLE
+                textView.text = emoji
+            }
+        }
+        else -> {
+            imageView.visibility = android.view.View.GONE
+            textView.visibility = android.view.View.VISIBLE
+            textView.text = emoji
+        }
+    }
+}
