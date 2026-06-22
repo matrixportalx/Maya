@@ -101,6 +101,10 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
 
     // Avatar yükle
     fun loadAvatarPreview(uriStr: String?) {
+        if (uriStr == MainActivity.DEFAULT_AVATAR_MARKER) {
+            avatarPreview.setImageResource(R.drawable.maya_default_avatar)
+            return
+        }
         if (uriStr != null) {
             try {
                 val bmp = loadRoundedBitmap(Uri.parse(uriStr), (72 * dp).toInt())
