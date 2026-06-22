@@ -132,12 +132,12 @@ internal fun MainActivity.sendMessage() {
     val urlsInMessage = extractUrlsFromMessage(msgText, limit = 3)
     if (urlsInMessage.isNotEmpty() && imgPath == null) {
         lifecycleScope.launch {
-            val savedTitle = supportActionBar?.title?.toString() ?: ""
-            supportActionBar?.title = "🔗 Sayfa okunuyor…"
+            val savedTitle = toolbarTitleView.text.toString()
+            toolbarTitleView.text = "🔗 Sayfa okunuyor…"
 
             val pageContent = withContext(Dispatchers.IO) { fetchUrlsFromMessage(msgText) }
 
-            supportActionBar?.title = savedTitle
+            toolbarTitleView.text = savedTitle
 
             if (pageContent.isNotEmpty()) {
                 val annotated = buildString {
