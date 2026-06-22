@@ -518,20 +518,23 @@ class MayagramActivity : AppCompatActivity() {
     // ── Yardımcı ─────────────────────────────────────────────────────────────
 
     private fun loadCharacters(json: String?): List<MayaCharacter> {
-        json ?: return emptyList()
-        return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).map { i ->
-                val obj = arr.getJSONObject(i)
-                MayaCharacter(
-                    id           = obj.getString("id"),
-                    name         = obj.getString("name"),
-                    userName     = obj.optString("user_name", "Kullanıcı"),
-                    emoji        = obj.optString("emoji", "🤖"),
-                    systemPrompt = obj.optString("system_prompt", ""),
-                    avatarUri    = obj.optString("avatar_uri", "").ifEmpty { null }
-                )
-            }
-        } catch (_: Exception) { emptyList() }
-    }
+    json ?: return emptyList()
+    return try {
+        val arr = JSONArray(json)
+        (0 until arr.length()).map { i ->
+            val obj = arr.getJSONObject(i)
+            MayaCharacter(
+                id           = obj.getString("id"),
+                name         = obj.getString("name"),
+                userName     = obj.optString("user_name", "Kullanıcı"),
+                emoji        = obj.optString("emoji", "🤖"),
+                systemPrompt = obj.optString("system_prompt", ""),
+                avatarUri    = obj.optString("avatar_uri", "").ifEmpty { null },
+                description  = obj.optString("description", ""),      // ← ekle
+                personality  = obj.optString("personality", ""),      // ← ekle
+                scenario     = obj.optString("scenario", "")          // ← ekle
+            )
+        }
+    } catch (_: Exception) { emptyList() }
+}
 }
