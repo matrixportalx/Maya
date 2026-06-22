@@ -51,8 +51,12 @@ data class MayaCharacter(
     val name: String,       // {{char}} için
     val userName: String,   // {{user}} için
     val emoji: String,
-    val systemPrompt: String,
-    val avatarUri: String? = null   // v6.0: Karakter avatar URI (kalıcı izinli)
+    val systemPrompt: String,        // Geriye dönük uyumluluk — yeni karakterlerde description+personality+scenario'dan türetilir
+    val avatarUri: String? = null,   // v6.0: Karakter avatar URI (kalıcı izinli)
+    val scenario: String = "",       // v6.3: Tavern "scenario" alanı — kullanıcıyla ilişki/bağlam
+    val firstMessage: String = "",   // v6.3: Tavern "first_mes" alanı — henüz otomatik kullanılmıyor
+    val description: String = "",    // v6.4: Tavern "description" alanı — bio/görünüm
+    val personality: String = ""     // v6.4: Tavern "personality" alanı — kişilik özeti
 )
 
 // ── Özel şablon veri sınıfı ──────────────────────────────────────────────────
