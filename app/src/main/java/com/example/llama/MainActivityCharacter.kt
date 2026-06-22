@@ -209,9 +209,13 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     val userNameField = field("Kullanıcı", existing?.userName ?: "")
     layout.addView(userNameField)
 
-    layout.addView(label("Sistem promptu"))
-    val promptField = field("Karakterin kişiliğini, görevini tanımlayın...", existing?.systemPrompt ?: "", multiLine = true)
-    layout.addView(promptField)
+    layout.addView(label("Açıklama / Bio (görünüm, geçmiş, görev)"))
+    val descriptionField = field("Karakterin görünümünü, geçmişini tanımlayın...", existing?.description ?: existing?.systemPrompt ?: "", multiLine = true)
+    layout.addView(descriptionField)
+
+    layout.addView(label("Kişilik (isteğe bağlı)"))
+    val personalityField = field("Karakterin kişilik özelliklerini tanımlayın...", existing?.personality ?: "", multiLine = true)
+    layout.addView(personalityField)
 
     layout.addView(label("Senaryo (kullanıcıyla ilişki/bağlam — isteğe bağlı)"))
     val scenarioField = field("Örn: Sen ve {{user}} eski arkadaşsınız...", existing?.scenario ?: "", multiLine = true)
@@ -228,17 +232,22 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
             val emoji   = emojiField.text.toString().trim().ifEmpty { "👩‍🦰" }
             val name    = nameField.text.toString().trim().ifEmpty { "Maya" }
             val uName   = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
-            val prompt  = promptField.text.toString().trim().ifEmpty { "{{date}} {{time}}. Senin adın {{char}}. Sen yararlı, zeki ve eğlenceli bir yapay zeka asistansın ve {{user}}'ın sadık bir dostusun." }
+            val description = descriptionField.text.toString().trim().ifEmpty {
+                "{{date}} {{time}}. Senin adın {{char}}. Sen yararlı, zeki ve eğlenceli bir yapay zeka asistansın ve {{user}}'ın sadık bir dostusun."
+            }
+            val personality = personalityField.text.toString().trim()
             val scenario = scenarioField.text.toString().trim()
             val firstMsg = firstMessageField.text.toString().trim()
 
             val char = MayaCharacter(
                 id = existing?.id ?: UUID.randomUUID().toString(),
                 name = name, userName = uName, emoji = emoji,
-                systemPrompt = prompt,
+                systemPrompt = existing?.systemPrompt ?: "",
                 avatarUri = tempAvatarUri ?: MainActivity.DEFAULT_AVATAR_MARKER,
                 scenario = scenario,
-                firstMessage = firstMsg
+                firstMessage = firstMsg,
+                description = description,
+                personality = personality
             )
             if (isNew) {
                 characters.add(char)
@@ -370,15 +379,23 @@ internal fun MainActivity.loadCharactersFromPrefs(): List<MayaCharacter> {
         val arr = JSONArray(json)
         (0 until arr.length()).map { i ->
             val obj = arr.getJSONObject(i)
+            val legacySystemPrompt = obj.optString("system_prompt", "")
+            // Eski karakterlerde description boşsa ama eski systemPrompt doluysa,
+            // description'a otomatik taşı (veri kaybı olmaz, kullanıcı görüp düzenleyebilir).
+            val description = obj.optString("description", "").ifEmpty {
+                if (obj.optString("personality", "").isEmpty()) legacySystemPrompt else ""
+            }
             MayaCharacter(
                 id = obj.getString("id"),
                 name = obj.getString("name"),
                 userName = obj.optString("user_name", "Kullanıcı"),
                 emoji = obj.optString("emoji", "🤖"),
-                systemPrompt = obj.optString("system_prompt", ""),
+                systemPrompt = legacySystemPrompt,
                 avatarUri = obj.optString("avatar_uri", "").ifEmpty { null },
                 scenario = obj.optString("scenario", ""),
-                firstMessage = obj.optString("first_message", "")
+                firstMessage = obj.optString("first_message", ""),
+                description = description,
+                personality = obj.optString("personality", "")
             )
         }
     } catch (e: Exception) { emptyList() }
@@ -394,10 +411,35 @@ internal fun MainActivity.saveCharactersToPrefs(list: List<MayaCharacter>) {
             put("avatar_uri", char.avatarUri ?: "")
             put("scenario", char.scenario)
             put("first_message", char.firstMessage)
+            put("description", char.description)
+            put("personality", char.personality)
         })
     }
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         .edit().putString("characters_json", arr.toString()).apply()
+}
+
+/**
+ * description + personality + scenario'dan modele gidecek tek sistem promptu metnini oluşturur.
+ * Boş alanlar atlanır. Hiçbiri doluysa eski systemPrompt'a (geriye dönük uyumluluk) düşülür.
+ */
+internal fun buildCharacterSystemPrompt(char: MayaCharacter): String {
+    val combined = buildString {
+        if (char.description.isNotBlank()) {
+            append(char.description.trim())
+        }
+        if (char.personality.isNotBlank()) {
+            if (isNotEmpty()) appendLine(); appendLine()
+            append("Kişilik: ")
+            append(char.personality.trim())
+        }
+        if (char.scenario.isNotBlank()) {
+            if (isNotEmpty()) appendLine(); appendLine()
+            append("Senaryo: ")
+            append(char.scenario.trim())
+        }
+    }.trim()
+    return combined.ifEmpty { char.systemPrompt }
 }
 
 internal fun MainActivity.applyActiveCharacterValues() {
@@ -405,7 +447,7 @@ internal fun MainActivity.applyActiveCharacterValues() {
     if (char != null) {
         charName     = char.name
         userName     = char.userName
-        systemPrompt = char.systemPrompt
+        systemPrompt = buildCharacterSystemPrompt(char)
     }
 }
 
@@ -413,7 +455,7 @@ internal fun MainActivity.setActiveCharacter(char: MayaCharacter) {
     activeCharacterId = char.id
     charName          = char.name
     userName          = char.userName
-    systemPrompt      = char.systemPrompt
+    systemPrompt      = buildCharacterSystemPrompt(char)
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         .edit().putString("active_character_id", char.id).apply()
     saveSettings()
@@ -543,7 +585,6 @@ internal fun MainActivity.handleTavernCardSelected(uri: Uri) {
                 ?: throw Exception("Dosya okunamadı")
 
             val card = TavernCardParser.readCardFromBytes(pngBytes)
-            val systemPrompt = TavernCardParser.buildSystemPrompt(card)
 
             // Avatarı (PNG'nin kendisi) cacheDir/character_avatars içine kopyala
             val avatarsDir = getCharacterAvatarsDir()
@@ -551,7 +592,7 @@ internal fun MainActivity.handleTavernCardSelected(uri: Uri) {
             FileOutputStream(avatarFile).use { out -> out.write(pngBytes) }
 
             withContext(Dispatchers.Main) {
-                showTavernImportReviewDialog(card, systemPrompt, avatarFile)
+                showTavernImportReviewDialog(card, avatarFile)
             }
         } catch (e: TavernCardParser.InvalidCardException) {
             withContext(Dispatchers.Main) {
@@ -574,7 +615,6 @@ internal fun MainActivity.handleTavernCardSelected(uri: Uri) {
  */
 internal fun MainActivity.showTavernImportReviewDialog(
     card: TavernCardParser.TavernCardData,
-    initialSystemPrompt: String,
     avatarFile: File
 ) {
     val dp = resources.displayMetrics.density
@@ -630,9 +670,16 @@ internal fun MainActivity.showTavernImportReviewDialog(
     val userNameField = field(userName)
     layout.addView(userNameField)
 
-    layout.addView(label("Sistem promptu (description + personality + örnek konuşma birleştirildi — düzenleyebilirsiniz)"))
-    val promptField = field(initialSystemPrompt, multiLine = true)
-    layout.addView(promptField)
+    layout.addView(label("Açıklama / Bio (görünüm, geçmiş, görev)"))
+    val descriptionInitial = if (card.mesExample.isNotBlank())
+        "${card.description.trim()}\n\nÖrnek konuşma stili:\n${card.mesExample.trim()}".trim()
+    else card.description
+    val descriptionField = field(descriptionInitial, multiLine = true)
+    layout.addView(descriptionField)
+
+    layout.addView(label("Kişilik"))
+    val personalityField = field(card.personality, multiLine = true)
+    layout.addView(personalityField)
 
     layout.addView(label("Senaryo (kullanıcıyla ilişki/bağlam)"))
     val scenarioField = field(card.scenario, multiLine = true)
@@ -648,7 +695,8 @@ internal fun MainActivity.showTavernImportReviewDialog(
         .setPositiveButton("Oluştur") { _, _ ->
             val name = nameField.text.toString().trim().ifEmpty { "İçe Aktarılan Karakter" }
             val uName = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" }
-            val prompt = promptField.text.toString().trim()
+            val description = descriptionField.text.toString().trim()
+            val personality = personalityField.text.toString().trim()
             val scenario = scenarioField.text.toString().trim()
             val firstMsg = firstMessageField.text.toString().trim()
 
@@ -657,10 +705,12 @@ internal fun MainActivity.showTavernImportReviewDialog(
                 name = name,
                 userName = uName,
                 emoji = "🃏",
-                systemPrompt = prompt,
+                systemPrompt = "",
                 avatarUri = "file:${avatarFile.absolutePath}",
                 scenario = scenario,
-                firstMessage = firstMsg
+                firstMessage = firstMsg,
+                description = description,
+                personality = personality
             )
             characters.add(newChar)
             saveCharactersToPrefs(characters)
@@ -699,11 +749,14 @@ internal fun MainActivity.exportCharacterAsTavernCard(char: MayaCharacter) {
                 }
             }
 
+            val descriptionToExport = char.description.ifBlank { char.systemPrompt }
+
             val cardBytes = TavernCardParser.buildCardPng(
                 sourcePngBytes = sourcePngBytes,
                 characterName = char.name,
                 userName = char.userName,
-                systemPrompt = char.systemPrompt,
+                description = descriptionToExport,
+                personality = char.personality,
                 scenario = char.scenario,
                 firstMessage = char.firstMessage
             )
