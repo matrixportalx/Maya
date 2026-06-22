@@ -51,7 +51,11 @@ class MayagramCommentAdapter : RecyclerView.Adapter<MayagramCommentAdapter.VH>()
         holder.tvContent.text = c.content
         holder.tvTime.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(c.timestamp))
 
-        if (c.authorAvatarUri != null) {
+        if (c.authorAvatarUri == "drawable:maya_default_avatar") {
+            holder.ivAvatar.setImageResource(R.drawable.maya_default_avatar)
+            holder.ivAvatar.visibility = View.VISIBLE
+            holder.tvEmoji.visibility = View.GONE
+        } else if (c.authorAvatarUri != null) {
             val sizePx = (32 * dp).toInt()
             holder.ivAvatar.visibility = View.VISIBLE
             holder.tvEmoji.visibility = View.GONE
