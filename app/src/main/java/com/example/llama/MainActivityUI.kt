@@ -240,7 +240,8 @@ internal fun MainActivity.checkForUpdateSilently() {
 internal fun MainActivity.checkForUpdateNow() {
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     lifecycleScope.launch {
-        supportActionBar?.subtitle = "🔍 Güncelleme kontrol ediliyor…"
+        toolbarSubtitleView.text = "🔍 Güncelleme kontrol ediliyor…"
+        toolbarSubtitleView.visibility = android.view.View.VISIBLE
         AppUpdater.markChecked(this@checkForUpdateNow)
         AppUpdater.checkForUpdate(
             context        = this@checkForUpdateNow,
