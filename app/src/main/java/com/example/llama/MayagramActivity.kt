@@ -287,7 +287,7 @@ class MayagramActivity : AppCompatActivity() {
             responders.forEachIndexed { index, character ->
                 delay(1200 + (index * 700L)) // 1.2 saniye, 1.9 saniye, 2.6 saniye...
                 // main, bu sınıftaki Activity'dir. generateCharacterComment ile yorumu eklet.
-                this@MayagramActivity.generateCharacterComment(post, character) { comment ->
+                main.generateCharacterComment(post, character) { comment ->
                     // Yorum başarıyla eklendiğinde log'a yaz
                     MainActivity.log("Mayagram", "${character.name} otomatik yanıt verdi")
                 }
