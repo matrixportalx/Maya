@@ -375,7 +375,10 @@ class MayagramActivity : AppCompatActivity() {
                     commentAdapter.addComment(comment)
                     commentEdit.text.clear()
                     rvComments.scrollToPosition(commentAdapter.itemCount - 1)
-                    scheduleAutoReplies(post, text, main)
+                    val mainActivity = this@MayagramActivity as? MainActivity
+                    if (mainActivity != null) {
+                        scheduleAutoReplies(post, text, mainActivity)
+                    }
                 }
             }
         }
