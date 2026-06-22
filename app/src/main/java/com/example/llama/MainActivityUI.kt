@@ -146,7 +146,7 @@ internal fun MainActivity.observeConversations() {
     }
 }
 
-internal fun MainActivity.updateToolbarTitle(title: String) { supportActionBar?.title = title }
+internal fun MainActivity.updateToolbarTitle(title: String) { toolbarTitleView.text = title }
 
 internal fun MainActivity.updateActiveModelSubtitle() {
     val modelName = loadedModelPath?.let { MainActivity.entryDisplayName(it) } ?: "Model yüklü değil"
