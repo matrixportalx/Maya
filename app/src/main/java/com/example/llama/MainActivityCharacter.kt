@@ -176,7 +176,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(emojiField)
 
     layout.addView(label("Karakter adı ({{char}})"))
-    val nameField = field("Maya", existing?.name ?: "")
+    val nameField = field("Maya", existing?.name ?: "Maya")
     layout.addView(nameField)
 
     layout.addView(label("Kullanıcı adı ({{user}})"))
