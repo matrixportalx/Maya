@@ -24,8 +24,11 @@ import kotlinx.coroutines.withContext
 internal fun MainActivity.bindViews() {
     drawerLayout    = findViewById(R.id.drawer_layout)
     toolbar         = findViewById(R.id.toolbar)
+    toolbarAvatarImage = toolbar.findViewById(R.id.toolbar_avatar_image)
+    toolbarAvatarEmoji = toolbar.findViewById(R.id.toolbar_avatar_emoji)
+    toolbarTitleView    = toolbar.findViewById(R.id.toolbar_title)
+    toolbarSubtitleView = toolbar.findViewById(R.id.toolbar_subtitle)
     messagesRv      = findViewById(R.id.messages)
-    messageInput    = findViewById(R.id.message)
     fab             = findViewById(R.id.send)
     conversationsRv = findViewById(R.id.conversations_list)
     btnNewChat      = findViewById(R.id.btn_new_chat)
