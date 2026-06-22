@@ -246,6 +246,55 @@ class MayagramActivity : AppCompatActivity() {
         }
     }
 
+        // Yeni Eklenen 1. Fonksiyon: Yorum içindeki @ işaretli karakterleri bulur
+    private fun extractMentionedCharacters(text: String, allCharacters: List<MayaCharacter>): List<MayaCharacter> {
+        val mentioned = mutableListOf<MayaCharacter>()
+        val words = text.split(" ")
+        for (word in words) {
+            if (word.startsWith("@")) {
+                // @ işaretini kaldır, noktalama işaretlerini temizle
+                val name = word.removePrefix("@").trim().replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
+                val found = allCharacters.find { it.name.equals(name, ignoreCase = true) }
+                if (found != null) mentioned.add(found)
+            }
+        }
+        return mentioned.distinctBy { it.id }
+    }
+
+    // Yeni Eklenen 2. Fonksiyon: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir
+    private fun scheduleAutoReplies(post: MayagramPost, commentText: String) {
+        val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
+        val allChars = loadCharacters(prefs.getString("characters_json", null))
+        if (allChars.isEmpty()) return
+
+        // 1. Gönderinin sahibini bul
+        val postOwner = allChars.find { it.id == post.characterId }
+
+        // 2. Yorumda @ ile etiketlenenleri bul (gönderi sahibini tekrar eklememek için filtrele)
+        val mentioned = extractMentionedCharacters(commentText, allChars)
+            .filter { it.id != post.characterId }
+
+        // 3. Yanıt verecekler listesini oluştur (Önce gönderi sahibi, sonra etiketlenenler)
+        val responders = mutableListOf<MayaCharacter>()
+        postOwner?.let { responders.add(it) }
+        responders.addAll(mentioned)
+        responders.distinctBy { it.id }
+
+        if (responders.isEmpty()) return
+
+        // 4. Sırayla (aralıklı) yorumları oluştur
+        lifecycleScope.launch {
+            responders.forEachIndexed { index, character ->
+                delay(1200 + (index * 700L)) // 1.2 saniye, 1.9 saniye, 2.6 saniye...
+                // main, bu sınıftaki Activity'dir. generateCharacterComment ile yorumu eklet.
+                this@MayagramActivity.generateCharacterComment(post, character) { comment ->
+                    // Yorum başarıyla eklendiğinde log'a yaz
+                    MainActivity.log("Mayagram", "${character.name} otomatik yanıt verdi")
+                }
+            }
+        }
+    }
+
     // ── Like ──────────────────────────────────────────────────────────────────
 
     private fun handleLike(post: MayagramPost) {
