@@ -665,7 +665,6 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
             formatted_user_prompt = marker_str + formatted_user_prompt;
             LOGi("processUserPrompt: image marker prepended (template=0)");
         }
-        g_image_just_embedded = false;
     }
 
     const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
