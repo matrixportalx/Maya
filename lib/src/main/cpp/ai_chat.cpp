@@ -61,6 +61,9 @@ static const char *ROLE_SYSTEM    = "system";
 static const char *ROLE_USER      = "user";
 static const char *ROLE_ASSISTANT = "assistant";
 
+static void reset_long_term_states();
+static void reset_short_term_states();
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 extern "C"
