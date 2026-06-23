@@ -53,8 +53,7 @@ static int  system_prompt_position   = 0;
 static int  stop_generation_position = 0;
 static std::string         cached_token_chars;
 static std::ostringstream  assistant_ss;
-// Görüntü embed edildikten sonra true olur; processUserPrompt marker'ı mesaja ekler.
-static bool g_image_just_embedded = false;
+
 // Qwen3 vb. Jinja şablonu generation prompt'una "<think>" eklediğinde Kotlin'e enjekte edilir.
 static std::string g_response_prefix;
 
