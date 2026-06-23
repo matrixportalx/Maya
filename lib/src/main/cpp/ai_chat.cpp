@@ -633,7 +633,8 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
             "<start_of_turn>user\n",                          // Gemma (template=3)
             "<|im_start|>user\n",                             // ChatML (template=2)
             "<|start_header_id|>user<|end_header_id|>\n\n",  // Llama3 (template=4)
-            "<|USER_TOKEN|>"                                   // Aya/Command-R (template=1)
+            "<|USER_TOKEN|>",                                  // Aya/Command-R (template=1)
+            "<|turn>user\n"                                    // Gemma 4 (template=7)
         };
         for (const auto& pattern : user_patterns) {
             const auto pos = formatted_user_prompt.find(pattern);
