@@ -352,7 +352,9 @@ class InferenceEngineImpl private constructor(
             _readyForSystemPrompt = false
             _state.value = InferenceEngine.State.ProcessingUserPrompt
 
+            Log.d("MayaVision", "Görüntü işleme BAŞLADI. Dosya: $imagePath")
             val result = nativeProcessImageWithPrompt(imagePath, message, predictLength)
+            Log.d("MayaVision", "Görüntü işleme BİTTİ. Sonuç kodu: $result")
             if (result != 0) {
                 Log.e(TAG, "Failed to process image+prompt, code=$result")
                 _state.value = InferenceEngine.State.ModelReady
