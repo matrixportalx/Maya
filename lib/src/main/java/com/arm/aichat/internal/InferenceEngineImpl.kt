@@ -129,7 +129,7 @@ class InferenceEngineImpl private constructor(
     @FastNative private external fun nativeLoadMmproj(path: String): Int
     @FastNative private external fun nativeUnloadMmproj()
     @FastNative private external fun nativeIsMmprojLoaded(): Boolean
-    @FastNative private external fun nativeProcessImageEmbed(imagePath: String): Int
+    @FastNative private external fun nativeProcessImageWithPrompt(imagePath: String, fullPrompt: String, nPredict: Int): Int
 
     // ── JNI: Bypass Context Length ────────────────────────────────────────────
     @FastNative private external fun nativeGetContextUsage(): Int
