@@ -518,7 +518,6 @@ static void reset_short_term_states() {
     cached_token_chars.clear();
     assistant_ss.str("");
     g_response_prefix.clear();
-    g_image_just_embedded = false;
 }
 
 static void shift_context() {
