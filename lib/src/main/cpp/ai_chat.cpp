@@ -635,37 +635,6 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     std::string formatted_user_prompt(user_prompt);
     env->ReleaseStringUTFChars(juser_prompt, user_prompt);
 
-    // Görüntü embed edildiyse marker'ı şablona göre doğru yere ekle.
-    // Kotlin buildVisionPrompt() sadece tek turn gönderir (tam geçmiş değil),
-    // bu sayede görüntü tokenları ile metin prompt'u sıralı ve tutarlı olur.
-    if (g_image_just_embedded) {
-        const char* marker_cstr = mtmd_default_marker();
-        const std::string marker_str = std::string(marker_cstr) + "\n";
-        bool inserted = false;
-
-        // Şablona göre ilk user turn pattern'ını bul ve marker'ı hemen arkasına ekle.
-        const std::vector<std::string> user_patterns = {
-            "<start_of_turn>user\n",                          // Gemma (template=3)
-            "<|im_start|>user\n",                             // ChatML (template=2)
-            "<|start_header_id|>user<|end_header_id|>\n\n",  // Llama3 (template=4)
-            "<|USER_TOKEN|>",                                  // Aya/Command-R (template=1)
-            "<|turn>user\n"                                    // Gemma 4 (template=7)
-        };
-        for (const auto& pattern : user_patterns) {
-            const auto pos = formatted_user_prompt.find(pattern);
-            if (pos != std::string::npos) {
-                formatted_user_prompt.insert(pos + pattern.size(), marker_str);
-                inserted = true;
-                LOGi("processUserPrompt: image marker inserted after '%s'", pattern.c_str());
-                break;
-            }
-        }
-        if (!inserted) {
-            // Template=0: düz metin, Jinja şablonu halleder, marker başa eklenir.
-            formatted_user_prompt = marker_str + formatted_user_prompt;
-            LOGi("processUserPrompt: image marker prepended (template=0)");
-        }
-    }
 
     const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
     if (has_chat_template) {
