@@ -40,13 +40,17 @@ internal fun MainActivity.generateMayagramPost(
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
 
             val systemInstr = buildString {
-                appendLine("Sen ${character.name} karakterisin. ${character.systemPrompt}")
+            val charPrompt = character.systemPrompt.ifEmpty {
+                listOf(character.description, character.personality, character.scenario)
+                    .filter { it.isNotBlank() }.joinToString(". ")
+            }
+            appendLine("Sen ${character.name} karakterisin. ${charPrompt}")
                 appendLine()
                 if (topicLine.isNotBlank()) appendLine(topicLine)
                 appendLine()
                 appendLine("Bir sosyal medya gönderisi hazırla. TAM OLARAK şu formatta yanıt ver (başka hiçbir şey yazma, açıklama yapma):")
                 appendLine()
-                appendLine("CAPTION: <gönderi metni, emoji ve hashtag dahil, max 3 cümle>")
+                appendLine("CAPTION: <gönderi metni, emoji ve hashtag dahil, max 4 cümle>")
                 append("IMAGE_PROMPT: <İngilizce, görüntü üretim modeli için ayrıntılı sahne tarifi, max 20 kelime>")
             }
 
@@ -159,7 +163,7 @@ internal fun MainActivity.generateCharacterComment(
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
             val tokenFlow = if (impl != null) {
-                impl.sendBypassPrompt(prompt, 100)
+                 impl.sendBypassPrompt(prompt, 100)
             } else {
                 engine.sendUserPrompt(prompt, predictLength = 100)
             }

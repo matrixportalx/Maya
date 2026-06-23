@@ -24,6 +24,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import tr.maya.data.AppDatabase
 import java.io.File
+import android.app.Dialog
+import android.widget.ImageButton
 
 class MayagramActivity : AppCompatActivity() {
 
@@ -34,6 +36,7 @@ class MayagramActivity : AppCompatActivity() {
     private lateinit var tvEmpty: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var tvProgressStatus: TextView
+    private lateinit var main: MainActivity
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Tema
@@ -244,6 +247,77 @@ class MayagramActivity : AppCompatActivity() {
         }
     }
 
+        // Yeni Eklenen 1. Fonksiyon: Yorum içindeki @ işaretli karakterleri bulur
+    private fun extractMentionedCharacters(text: String, allCharacters: List<MayaCharacter>): List<MayaCharacter> {
+        val mentioned = mutableListOf<MayaCharacter>()
+        val words = text.split(" ")
+        for (word in words) {
+            if (word.startsWith("@")) {
+                // @ işaretini kaldır, noktalama işaretlerini temizle
+                val name = word.removePrefix("@").trim().replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
+                val found = allCharacters.find { it.name.equals(name, ignoreCase = true) }
+                if (found != null) mentioned.add(found)
+            }
+        }
+        return mentioned.distinctBy { it.id }
+    }
+
+    // Yeni Eklenen 2. Fonksiyon: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir
+    private fun scheduleAutoReplies(post: MayagramPost, commentText: String) {
+    // Önce tüm karakterleri yükle
+    val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
+    val allChars = loadCharacters(prefs.getString("characters_json", null))
+    if (allChars.isEmpty()) {
+        MainActivity.log("Mayagram", "⚠️ Hiç karakter yok!")
+        return
+    }
+
+    // 1. Gönderi sahibini bul
+    val postOwner = allChars.find { it.id == post.characterId }
+    if (postOwner == null) {
+        MainActivity.log("Mayagram", "⚠️ Gönderi sahibi bulunamadı! ID: ${post.characterId}")
+        return
+    }
+
+    // 2. Yorumdaki @ etiketlerini bul
+    val mentioned = mutableListOf<MayaCharacter>()
+    val words = commentText.split(" ")
+    for (word in words) {
+        if (word.startsWith("@")) {
+            val name = word.removePrefix("@").trim()
+                .replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
+            val found = allChars.find { it.name.equals(name, ignoreCase = true) }
+            if (found != null && found.id != post.characterId) {
+                mentioned.add(found)
+                MainActivity.log("Mayagram", "✅ Etiket bulundu: ${found.name}")
+            }
+        }
+    }
+
+    // 3. Yanıt verecekler listesi (önce gönderi sahibi, sonra etiketlenenler)
+    val responders = mutableListOf(postOwner)
+    responders.addAll(mentioned.distinctBy { it.id })
+
+    MainActivity.log("Mayagram", "📢 Yanıt verecekler: ${responders.joinToString { it.name }}")
+
+    // 4. Sırayla yorum yaptır
+    lifecycleScope.launch {
+        for ((index, character) in responders.withIndex()) {
+            kotlinx.coroutines.delay(1500 + (index * 800L))
+            
+            // MainActivity'yi bul
+            val main = this@MayagramActivity as? MainActivity
+            if (main != null) {
+                main.generateCharacterComment(post, character) { comment ->
+                    MainActivity.log("Mayagram", "💬 ${character.name} yanıt verdi: ${comment.content}")
+                }
+            } else {
+                MainActivity.log("Mayagram", "❌ MainActivity bulunamadı!")
+            }
+        }
+    }
+}
+
     // ── Like ──────────────────────────────────────────────────────────────────
 
     private fun handleLike(post: MayagramPost) {
@@ -324,6 +398,10 @@ class MayagramActivity : AppCompatActivity() {
                     commentAdapter.addComment(comment)
                     commentEdit.text.clear()
                     rvComments.scrollToPosition(commentAdapter.itemCount - 1)
+                    val mainActivity = this@MayagramActivity as? MainActivity
+                    if (mainActivity != null) {
+                        scheduleAutoReplies(post, text)
+                    }
                 }
             }
         }
@@ -355,23 +433,27 @@ class MayagramActivity : AppCompatActivity() {
             Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
             return
         }
-        val dp = resources.displayMetrics.density
-        val iv = ImageView(this).apply {
-            setImageBitmap(bmp)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-        }
-        val sv = ScrollView(this).apply {
-            addView(iv)
-            setPadding((8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
-        }
-        AlertDialog.Builder(this)
-            .setTitle("🖼️ Görüntü")
-            .setView(sv)
-            .setPositiveButton("📤 Paylaş") { _, _ -> shareImage(imagePath) }
-            .setNeutralButton("💾 Galeriye Kaydet") { _, _ -> saveToGallery(imagePath) }
-            .setNegativeButton("Kapat", null)
-            .show()
+
+        val view = layoutInflater.inflate(R.layout.dialog_fullscreen_image, null)
+        val imageView = view.findViewById<ZoomableImageView>(R.id.fs_image_view)
+        val btnShare = view.findViewById<ImageButton>(R.id.btn_fs_share)
+        val btnSave  = view.findViewById<ImageButton>(R.id.btn_fs_save)
+        val btnClose = view.findViewById<ImageButton>(R.id.btn_fs_close)
+
+        imageView.setImageBitmap(bmp)
+
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        dialog.setContentView(view)
+        dialog.window?.setLayout(
+            android.view.WindowManager.LayoutParams.MATCH_PARENT,
+            android.view.WindowManager.LayoutParams.MATCH_PARENT
+        )
+
+        btnShare.setOnClickListener { shareImage(imagePath) }
+        btnSave.setOnClickListener { saveToGallery(imagePath) }
+        btnClose.setOnClickListener { dialog.dismiss() }
+
+        dialog.show()
     }
 
     private fun shareImage(imagePath: String) {
@@ -436,20 +518,23 @@ class MayagramActivity : AppCompatActivity() {
     // ── Yardımcı ─────────────────────────────────────────────────────────────
 
     private fun loadCharacters(json: String?): List<MayaCharacter> {
-        json ?: return emptyList()
-        return try {
-            val arr = JSONArray(json)
-            (0 until arr.length()).map { i ->
-                val obj = arr.getJSONObject(i)
-                MayaCharacter(
-                    id           = obj.getString("id"),
-                    name         = obj.getString("name"),
-                    userName     = obj.optString("user_name", "Kullanıcı"),
-                    emoji        = obj.optString("emoji", "🤖"),
-                    systemPrompt = obj.optString("system_prompt", ""),
-                    avatarUri    = obj.optString("avatar_uri", "").ifEmpty { null }
-                )
-            }
-        } catch (_: Exception) { emptyList() }
-    }
+    json ?: return emptyList()
+    return try {
+        val arr = JSONArray(json)
+        (0 until arr.length()).map { i ->
+            val obj = arr.getJSONObject(i)
+            MayaCharacter(
+                id           = obj.getString("id"),
+                name         = obj.getString("name"),
+                userName     = obj.optString("user_name", "Kullanıcı"),
+                emoji        = obj.optString("emoji", "🤖"),
+                systemPrompt = obj.optString("system_prompt", ""),
+                avatarUri    = obj.optString("avatar_uri", "").ifEmpty { null },
+                description  = obj.optString("description", ""),      // ← ekle
+                personality  = obj.optString("personality", ""),      // ← ekle
+                scenario     = obj.optString("scenario", "")          // ← ekle
+            )
+        }
+    } catch (_: Exception) { emptyList() }
+}
 }

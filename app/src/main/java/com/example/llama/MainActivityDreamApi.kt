@@ -27,6 +27,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 import android.util.Base64
+import android.content.Intent
 
 // ── Dream API veri sınıfları ──────────────────────────────────────────────────
 
@@ -343,8 +344,9 @@ internal fun MainActivity.showDreamApiDialog() {
     val dialog = android.app.AlertDialog.Builder(this)
         .setTitle("🎨 Görüntü Oluştur")
         .setView(scroll)
-        .setPositiveButton("Oluştur", null)   // listener aşağıda override edilecek
+        .setPositiveButton("Oluştur", null)
         .setNegativeButton("İptal") { _, _ -> activeJob?.cancel() }
+        .setNeutralButton("Kapat", null)
         .create()
 
     dialog.setOnShowListener {
@@ -403,21 +405,28 @@ internal fun MainActivity.showDreamApiDialog() {
                                 progressLabel.text = "Tamamlandı (${event.generationTimeMs}ms)"
                                 previewImageView.setImageBitmap(event.bitmap)
                                 previewImageView.visibility = android.view.View.VISIBLE
-    
-                                // Dosyaya kaydet ve sohbete ekle
+
+                                // Dosyaya kaydet (cache) — galeri/paylaş butonları bu path'i kullanacak
                                 val path = saveDreamBitmap(this@showDreamApiDialog, event.bitmap)
-                                addDreamImageToChat(prompt, path, event.bitmap)
-    
-                                // Negatif buton metnini "Kapat" yap
-                                val negBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
-                                negBtn?.text = "Kapat"
-                                negBtn?.setOnClickListener {
-                                    dialog.dismiss()
+
+                                // Pozitif butonu "Galeriye Kaydet" olarak yeniden kullan
+                                btn.text = "💾 Galeriye Kaydet"
+                                btn.isEnabled = true
+                                btn.setOnClickListener {
+                                    saveDreamImageToGallery(path)
                                 }
-    
-                                // Pozitif buton gizle veya deaktif et
-                                btn.isEnabled = false
-                                btn.visibility = android.view.View.GONE
+
+                                // Negatif butonu "Paylaş" yap
+                                val negBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE)
+                                negBtn?.text = "📤 Paylaş"
+                                negBtn?.setOnClickListener {
+                                    shareDreamImage(path)
+                                }
+
+                                // Neutral butonu "Kapat" yap (henüz yoksa diyalog builder'a eklenmeli — aşağıya bak)
+                                val neutralBtn = dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL)
+                                neutralBtn?.text = "Kapat"
+                                neutralBtn?.setOnClickListener { dialog.dismiss() }
                             }
 
                             is DreamEvent.Error -> {
@@ -656,5 +665,62 @@ internal fun MainActivity.buildDreamApiSettingsCard(
         dreamApiEnabled = enableSwitch.isChecked
         dreamApiUrl     = urlEdit.text.toString().trim().ifEmpty { "http://127.0.0.1:8081" }
         saveDreamSettings()
+    }
+}
+// ── Galeriye kaydet / Paylaş (Dream API üretimleri) ──────────────────────────
+
+internal fun MainActivity.saveDreamImageToGallery(imagePath: String) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val src = File(imagePath)
+            if (!src.exists()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery, "Dosya bulunamadı", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                    "maya_${System.currentTimeMillis()}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Maya")
+            }
+            val uri = contentResolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+            )
+            if (uri != null) {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    src.inputStream().use { it.copyTo(out) }
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery,
+                        "✅ Galeriye kaydedildi (Pictures/Maya)", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveDreamImageToGallery, "Kaydetme başarısız", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@saveDreamImageToGallery, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+internal fun MainActivity.shareDreamImage(imagePath: String) {
+    try {
+        val file = File(imagePath)
+        if (!file.exists()) { Toast.makeText(this, "Dosya bulunamadı", Toast.LENGTH_SHORT).show(); return }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "${packageName}.provider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(intent, "Görüntüyü Paylaş"))
+    } catch (e: Exception) {
+        Toast.makeText(this, "Paylaşılamadı: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }

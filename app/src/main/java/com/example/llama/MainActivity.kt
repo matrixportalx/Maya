@@ -43,6 +43,7 @@ import java.io.FileOutputStream
 // v6.0 - Avatar desteği: karakter ve kullanıcı için özel fotoğraf
 // v6.1 - Dream API entegrasyonu: LocalDream SSE görüntü üretimi
 // v6.2 - Mayagram: Maya karakterlerinin sosyal medya akışı
+// v6.3 - Tavern karakter kartı içe/dışa aktarma (.png)
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -50,8 +51,12 @@ data class MayaCharacter(
     val name: String,       // {{char}} için
     val userName: String,   // {{user}} için
     val emoji: String,
-    val systemPrompt: String,
-    val avatarUri: String? = null   // v6.0: Karakter avatar URI (kalıcı izinli)
+    val systemPrompt: String,        // Geriye dönük uyumluluk — yeni karakterlerde description+personality+scenario'dan türetilir
+    val avatarUri: String? = null,   // v6.0: Karakter avatar URI (kalıcı izinli)
+    val scenario: String = "",       // v6.3: Tavern "scenario" alanı — kullanıcıyla ilişki/bağlam
+    val firstMessage: String = "",   // v6.3: Tavern "first_mes" alanı — henüz otomatik kullanılmıyor
+    val description: String = "",    // v6.4: Tavern "description" alanı — bio/görünüm
+    val personality: String = ""     // v6.4: Tavern "personality" alanı — kişilik özeti
 )
 
 // ── Özel şablon veri sınıfı ──────────────────────────────────────────────────
@@ -113,6 +118,10 @@ class MainActivity : AppCompatActivity() {
         const val THEME_DARK   = 1
         const val THEME_LIGHT  = 2
 
+        // ── Varsayılan Maya avatarı (gömülü drawable) için özel işaretçi ────────
+        // avatarUri alanında normal galeri URI'leri "content://..." şeklindeyken,
+        // bu özel string drawable/maya_default_avatar.png'yi işaret eder.
+        const val DEFAULT_AVATAR_MARKER = "drawable:maya_default_avatar"
         fun applyThemeMode(mode: Int) {
             val nightMode = when (mode) {
                 THEME_DARK  -> AppCompatDelegate.MODE_NIGHT_YES
@@ -241,6 +250,9 @@ class MainActivity : AppCompatActivity() {
     internal var dreamUseOpenCl: Boolean = false
     internal var dreamDefaultNegativePrompt: String = ""
 
+    // ── v6.3: Tavern kartı dışa aktarma — kaydet diyaloğu sonucu beklenen bayt dizisi ──
+    internal var pendingTavernExportBytes: ByteArray? = null
+
     internal val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             val binder = service as MayaForegroundService.LocalBinder
@@ -350,6 +362,26 @@ class MainActivity : AppCompatActivity() {
             result.data?.data?.let { uri ->
                 handleUserAvatarSelected(uri)
             }
+        }
+    }
+
+    /** v6.3: Tavern karakter kartı (.png) seçici — içe aktarma */
+    internal val tavernCardPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri -> handleTavernCardSelected(uri) }
+        }
+    }
+
+    /** v6.3: Tavern karakter kartı (.png) kaydetme — dışa aktarma */
+    internal val tavernCardSaveLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri -> writeTavernCardToUri(uri) }
+        } else {
+            pendingTavernExportBytes = null
         }
     }
 
