@@ -348,23 +348,15 @@ class InferenceEngineImpl private constructor(
         }
 
         try {
-            Log.i(TAG, "sendUserPromptWithImage: embedding image from $imagePath")
+            Log.i(TAG, "sendUserPromptWithImage: processing image+prompt together from $imagePath")
             _readyForSystemPrompt = false
             _state.value = InferenceEngine.State.ProcessingUserPrompt
 
-            val embedResult = nativeProcessImageEmbed(imagePath)
-            if (embedResult != 0) {
-                Log.e(TAG, "Image embed failed with code $embedResult")
+            val result = nativeProcessImageWithPrompt(imagePath, message, predictLength)
+            if (result != 0) {
+                Log.e(TAG, "Failed to process image+prompt, code=$result")
                 _state.value = InferenceEngine.State.ModelReady
                 return@flow
-            }
-
-            processUserPrompt(message, predictLength).let { result ->
-                if (result != 0) {
-                    Log.e(TAG, "Failed to process user prompt after image embed: $result")
-                    _state.value = InferenceEngine.State.ModelReady
-                    return@flow
-                }
             }
 
             Log.i(TAG, "Image + user prompt processed. Generating response...")
