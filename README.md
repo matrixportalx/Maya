@@ -149,7 +149,7 @@ Hazır APK dosyasını [Releases](../../releases) bölümünden indirebilirsiniz
 | Tiny Aya / Aya / Command-R | ✅ Çalışıyor |
 | IBM Granite | ✅ Çalışıyor |
 | LFM (Liquid) | ✅ Çalışıyor |
-| Gemma 3n (heretic/topluluk) | ⚠️ Kararsız |
+| Gemma 3n (heretic/topluluk) | ✅ Çalışıyor |
 | Görsel tanıma (vision/mmproj) | ✅ Çalışıyor (mtmd API) |
 
 Genel kural: llama.cpp'nin desteklediği tüm GGUF modeller, gerekirse özel şablon oluşturularak çalışır.
