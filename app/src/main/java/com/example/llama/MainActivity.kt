@@ -389,6 +389,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         appThemeMode = prefs.getInt("app_theme_mode", THEME_SYSTEM)
         applyThemeMode(appThemeMode)
+        loggingEnabled = prefs.getBoolean("logging_enabled", false)
 
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)

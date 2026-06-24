@@ -53,14 +53,16 @@ static int  system_prompt_position   = 0;
 static int  stop_generation_position = 0;
 static std::string         cached_token_chars;
 static std::ostringstream  assistant_ss;
-// Görüntü embed edildikten sonra true olur; processUserPrompt marker'ı mesaja ekler.
-static bool g_image_just_embedded = false;
+
 // Qwen3 vb. Jinja şablonu generation prompt'una "<think>" eklediğinde Kotlin'e enjekte edilir.
 static std::string g_response_prefix;
 
 static const char *ROLE_SYSTEM    = "system";
 static const char *ROLE_USER      = "user";
 static const char *ROLE_ASSISTANT = "assistant";
+
+static void reset_long_term_states();
+static void reset_short_term_states();
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -177,36 +179,52 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_nativeIsMmprojLoaded(JNIEnv * /
 
 extern "C"
 JNIEXPORT jint JNICALL
-Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageEmbed(
+Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageWithPrompt(
         JNIEnv *env,
         jobject /*unused*/,
-        jstring jimagePath
+        jstring jimagePath,
+        jstring jfullPrompt,
+        jint n_predict
 ) {
     if (!g_mtmd_ctx) {
-        LOGe("nativeProcessImageEmbed: mmproj yüklü değil");
+        LOGe("nativeProcessImageWithPrompt: mmproj yüklü değil");
         return 1;
     }
     if (!g_context) {
-        LOGe("nativeProcessImageEmbed: LLM context hazır değil");
+        LOGe("nativeProcessImageWithPrompt: LLM context hazır değil");
         return 2;
     }
 
-    const auto *image_path = env->GetStringUTFChars(jimagePath, nullptr);
-    LOGi("nativeProcessImageEmbed: %s", image_path);
+    reset_short_term_states();
 
-    // Yeni API (llama.cpp 0.15.x+): wrapper struct döner, 3. parametre placeholder=false
+    const auto *image_path_cstr = env->GetStringUTFChars(jimagePath, nullptr);
+    std::string image_path(image_path_cstr);
+    env->ReleaseStringUTFChars(jimagePath, image_path_cstr);
+
+    const auto *full_prompt_cstr = env->GetStringUTFChars(jfullPrompt, nullptr);
+    std::string full_prompt(full_prompt_cstr);
+    env->ReleaseStringUTFChars(jfullPrompt, full_prompt_cstr);
+
+    LOGi("nativeProcessImageWithPrompt: image=%s promptLen=%d", image_path.c_str(), (int) full_prompt.size());
+
+    // Prompt'ta marker yoksa, mtmd_tokenize görüntüyü hiç bağlayamaz.
+    // Güvenlik amacıyla yoksa başa ekliyoruz (normalde Kotlin tarafı zaten ekliyor).
+    const char * marker = mtmd_default_marker();
+    if (full_prompt.find(marker) == std::string::npos) {
+        full_prompt = std::string(marker) + "\n" + full_prompt;
+        LOGw("nativeProcessImageWithPrompt: prompt'ta marker yoktu, başa eklendi");
+    }
+
     struct mtmd_helper_bitmap_wrapper bmp_wrapper =
-        mtmd_helper_bitmap_init_from_file(g_mtmd_ctx, image_path, /*placeholder=*/false);
-    env->ReleaseStringUTFChars(jimagePath, image_path);
+        mtmd_helper_bitmap_init_from_file(g_mtmd_ctx, image_path.c_str(), /*placeholder=*/false);
 
     if (!bmp_wrapper.bitmap) {
-        LOGe("nativeProcessImageEmbed: mtmd_helper_bitmap_init_from_file başarısız");
+        LOGe("nativeProcessImageWithPrompt: mtmd_helper_bitmap_init_from_file başarısız");
         return 3;
     }
 
-    const char * marker = mtmd_default_marker();
     mtmd_input_text text_input;
-    text_input.text          = marker;
+    text_input.text          = full_prompt.c_str();
     text_input.add_special   = false;
     text_input.parse_special = true;
 
@@ -218,7 +236,7 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageEmbed(
     mtmd_bitmap_free(bmp_wrapper.bitmap);
 
     if (res != 0) {
-        LOGe("nativeProcessImageEmbed: mtmd_tokenize başarısız, res=%d", res);
+        LOGe("nativeProcessImageWithPrompt: mtmd_tokenize başarısız, res=%d", res);
         mtmd_input_chunks_free(chunks);
         return 4;
     }
@@ -231,20 +249,20 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_nativeProcessImageEmbed(
         (llama_pos) current_position,
         0,
         BATCH_SIZE,
-        false,
+        true,   // compute logits on last token — bir sonraki generateNextToken() için gerekli
         &new_n_past
     );
 
     mtmd_input_chunks_free(chunks);
 
     if (eval_res != 0) {
-        LOGe("nativeProcessImageEmbed: mtmd_helper_eval_chunks başarısız, res=%d", eval_res);
+        LOGe("nativeProcessImageWithPrompt: mtmd_helper_eval_chunks başarısız, res=%d", eval_res);
         return 5;
     }
 
     current_position = (int) new_n_past;
-    g_image_just_embedded = true;
-    LOGi("nativeProcessImageEmbed: görüntü gömüldü, new_position=%d", current_position);
+    stop_generation_position = current_position + n_predict;
+    LOGi("nativeProcessImageWithPrompt: tamamlandı, new_position=%d stop=%d", current_position, stop_generation_position);
     return 0;
 }
 
@@ -503,7 +521,6 @@ static void reset_short_term_states() {
     cached_token_chars.clear();
     assistant_ss.str("");
     g_response_prefix.clear();
-    g_image_just_embedded = false;
 }
 
 static void shift_context() {
@@ -620,37 +637,6 @@ Java_com_arm_aichat_internal_InferenceEngineImpl_processUserPrompt(
     std::string formatted_user_prompt(user_prompt);
     env->ReleaseStringUTFChars(juser_prompt, user_prompt);
 
-    // Görüntü embed edildiyse marker'ı şablona göre doğru yere ekle.
-    // Kotlin buildVisionPrompt() sadece tek turn gönderir (tam geçmiş değil),
-    // bu sayede görüntü tokenları ile metin prompt'u sıralı ve tutarlı olur.
-    if (g_image_just_embedded) {
-        const char* marker_cstr = mtmd_default_marker();
-        const std::string marker_str = std::string(marker_cstr) + "\n";
-        bool inserted = false;
-
-        // Şablona göre ilk user turn pattern'ını bul ve marker'ı hemen arkasına ekle.
-        const std::vector<std::string> user_patterns = {
-            "<start_of_turn>user\n",                          // Gemma (template=3)
-            "<|im_start|>user\n",                             // ChatML (template=2)
-            "<|start_header_id|>user<|end_header_id|>\n\n",  // Llama3 (template=4)
-            "<|USER_TOKEN|>"                                   // Aya/Command-R (template=1)
-        };
-        for (const auto& pattern : user_patterns) {
-            const auto pos = formatted_user_prompt.find(pattern);
-            if (pos != std::string::npos) {
-                formatted_user_prompt.insert(pos + pattern.size(), marker_str);
-                inserted = true;
-                LOGi("processUserPrompt: image marker inserted after '%s'", pattern.c_str());
-                break;
-            }
-        }
-        if (!inserted) {
-            // Template=0: düz metin, Jinja şablonu halleder, marker başa eklenir.
-            formatted_user_prompt = marker_str + formatted_user_prompt;
-            LOGi("processUserPrompt: image marker prepended (template=0)");
-        }
-        g_image_just_embedded = false;
-    }
 
     const bool has_chat_template = common_chat_templates_was_explicit(g_chat_templates.get());
     if (has_chat_template) {

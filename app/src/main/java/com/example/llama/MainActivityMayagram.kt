@@ -19,7 +19,7 @@ internal fun MainActivity.openMayagram() {
     startActivity(intent)
 }
 
-// ── Post üretimi: LLM + Dream API pipeline ────────────────────────────────────
+// ── Post üretimi: LLM + Dream API pipeline (karakter gönderisi) ──────────────
 
 internal fun MainActivity.generateMayagramPost(
     character: MayaCharacter,
@@ -132,7 +132,8 @@ internal fun MainActivity.generateMayagramPost(
                 caption            = finalCaption,
                 imagePath          = imagePath,
                 dreamPrompt        = usedPrompt,
-                timestamp          = System.currentTimeMillis()
+                timestamp          = System.currentTimeMillis(),
+                authorIsUser       = false
             )
 
             withContext(Dispatchers.IO) {
@@ -148,18 +149,155 @@ internal fun MainActivity.generateMayagramPost(
     }
 }
 
-// ── Karakter yorumu üret ──────────────────────────────────────────────────────
+// ── v6.5: Kullanıcı gönderisi üretimi ─────────────────────────────────────────
+
+/**
+ * Kullanıcının kendi Mayagram gönderisini oluşturur.
+ *
+ * [galleryImagePath] doluysa o görüntü doğrudan kullanılır (Dream API çağrılmaz).
+ * [galleryImagePath] null VE [useAiImage] true ise: kullanıcının [captionText]'inden
+ * LLM ile İngilizce bir Dream prompt'u türetilir ve Dream API ile görüntü üretilir.
+ * İkisi de yoksa yalnızca metin gönderi paylaşılır.
+ */
+internal fun MainActivity.generateUserPost(
+    captionText: String,
+    galleryImagePath: String?,
+    useAiImage: Boolean,
+    onProgress: (String) -> Unit,
+    onDone: (MayagramPost) -> Unit,
+    onError: (String) -> Unit
+) {
+    if (captionText.isBlank() && galleryImagePath == null) {
+        onError("Gönderi metni veya görüntü gerekli")
+        return
+    }
+
+    lifecycleScope.launch {
+        try {
+            val prefs = getSharedPreferences("llama_prefs", android.content.Context.MODE_PRIVATE)
+            val userDisplayName = prefs.getString("user_name", "Kullanıcı") ?: "Kullanıcı"
+
+            var finalImagePath: String? = galleryImagePath
+            var usedPrompt: String? = null
+
+            if (finalImagePath == null && useAiImage) {
+                if (loadedModelPath == null) {
+                    onError("AI görüntü prompt'u için önce bir model yükleyin")
+                    return@launch
+                }
+                if (!dreamApiEnabled) {
+                    onError("Dream API kapalı — Ayarlar'dan etkinleştirin")
+                    return@launch
+                }
+
+                onProgress("🧠 Görsel tarifi oluşturuluyor…")
+                val imagePrompt = generateImagePromptFromCaption(captionText.ifBlank { "a beautiful moment" })
+                usedPrompt = imagePrompt
+
+                onProgress("🎨 Görüntü oluşturuluyor…")
+                var dreamBitmap: Bitmap? = null
+                val dreamReq = DreamRequest(
+                    prompt         = imagePrompt,
+                    negativePrompt = dreamDefaultNegativePrompt,
+                    size           = dreamSize,
+                    steps          = dreamSteps,
+                    cfg            = dreamCfg,
+                    seed           = if (dreamSeed < 0) System.currentTimeMillis() % 100000L else dreamSeed,
+                    useOpenCl      = dreamUseOpenCl
+                )
+                performDreamRequest(dreamApiUrl, dreamReq) { event ->
+                    when (event) {
+                        is DreamEvent.Progress -> onProgress("🎨 ${event.step}/${event.totalSteps} adım…")
+                        is DreamEvent.Complete -> dreamBitmap = event.bitmap
+                        is DreamEvent.Error    -> MainActivity.log("Mayagram", "Dream hata (user post): ${event.message}")
+                    }
+                }
+                if (dreamBitmap != null) {
+                    finalImagePath = saveMayagramImage(dreamBitmap!!)
+                } else {
+                    MainActivity.log("Mayagram", "AI görüntü üretilemedi, metin-only gönderi olarak devam ediliyor")
+                }
+            }
+
+            onProgress("💾 Kaydediliyor…")
+            val post = MayagramPost(
+                characterId        = "user",
+                characterName      = userDisplayName,
+                characterEmoji     = "👤",
+                characterAvatarUri = userAvatarUri,
+                caption            = captionText,
+                imagePath          = finalImagePath,
+                dreamPrompt        = usedPrompt,
+                timestamp          = System.currentTimeMillis(),
+                authorIsUser       = true
+            )
+
+            withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(this@generateUserPost)
+                    .mayagramDao().insertPost(post)
+            }
+
+            onDone(post)
+        } catch (e: Exception) {
+            onError("Hata: ${e.message}")
+        }
+    }
+}
+
+/**
+ * Kullanıcının yazdığı Türkçe/herhangi bir dildeki caption metninden,
+ * Dream API'ye gönderilecek İngilizce, betimleyici bir görsel prompt'u üretir.
+ * Thinking blokları ve format tokenları extractVisibleContent ile temizlenir.
+ */
+private suspend fun MainActivity.generateImagePromptFromCaption(captionText: String): String {
+    val instruction = buildString {
+        appendLine("Aşağıdaki sosyal medya gönderisi metnine uygun, İngilizce ve görüntü üretim modeli için ayrıntılı bir sahne tarifi yaz.")
+        appendLine("SADECE İngilizce sahne tarifini yaz, başka hiçbir şey ekleme. Maksimum 20 kelime.")
+        appendLine()
+        appendLine("Gönderi metni: \"$captionText\"")
+    }
+    val fullPrompt = buildMayagramPrompt(instruction)
+    val sb = StringBuilder()
+    try {
+        val impl = engine as? InferenceEngineImpl
+        val tokenFlow = if (impl != null) impl.sendBypassPrompt(fullPrompt, 60)
+                        else engine.sendUserPrompt(fullPrompt, predictLength = 60)
+        tokenFlow.collect { sb.append(it) }
+    } catch (e: Exception) {
+        MainActivity.log("Mayagram", "Görsel prompt üretim hatası: ${e.message}")
+    }
+    val cleaned = extractVisibleContent(sb.toString())
+        .replace(Regex("(?i)^(image[_ ]?prompt|caption)\\s*:\\s*"), "")
+        .replace("\"", "")
+        .trim()
+    return cleaned.ifBlank { captionText.take(80) }
+}
+
+// ── Karakter yorumu üret (post'a direkt yorum — parentCommentId yok) ─────────
 
 internal fun MainActivity.generateCharacterComment(
     post: MayagramPost,
     commenter: MayaCharacter,
+    parentCommentId: String? = null,
     onDone: (MayagramComment) -> Unit
 ) {
     if (loadedModelPath == null) return
 
     lifecycleScope.launch {
         try {
-            val prompt = buildMayagramCommentPrompt(post, commenter)
+            // v6.5: parentCommentId varsa, o yoruma yanıt veriliyormuş gibi prompt oluştur
+            val parentComment = parentCommentId?.let {
+                withContext(Dispatchers.IO) {
+                    AppDatabase.getInstance(this@generateCharacterComment).mayagramDao().getCommentById(it)
+                }
+            }
+
+            val prompt = if (parentComment != null) {
+                buildMayagramReplyPrompt(post, commenter, parentComment)
+            } else {
+                buildMayagramCommentPrompt(post, commenter)
+            }
+
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
             val tokenFlow = if (impl != null) {
@@ -188,7 +326,9 @@ internal fun MainActivity.generateCharacterComment(
                 authorName      = commenter.name,
                 authorEmoji     = commenter.emoji,
                 authorAvatarUri = commenter.avatarUri,
-                content         = text
+                content         = text,
+                parentCommentId = parentCommentId,
+                authorIsUser    = false
             )
             withContext(Dispatchers.IO) {
                 AppDatabase.getInstance(this@generateCharacterComment)
@@ -225,13 +365,38 @@ private fun MainActivity.buildMayagramCommentPrompt(
     post: MayagramPost,
     commenter: MayaCharacter
 ): String {
+    val authorLabel = if (post.authorIsUser) "Kullanıcı (${post.characterName})" else post.characterName
     val instruction = buildString {
         appendLine("Sen ${commenter.name} karakterisin. ${commenter.systemPrompt}")
         appendLine()
-        appendLine("${post.characterName} şunu paylaştı:")
+        appendLine("$authorLabel şunu paylaştı:")
         appendLine("\"${post.caption}\"")
         appendLine()
         append("Bu gönderiye karakterine uygun, kısa ve samimi bir yorum yaz (tek cümle, emoji kullanabilirsin). Sadece yorum metnini yaz, başka hiçbir şey ekleme:")
+    }
+    return buildMayagramPrompt(instruction)
+}
+
+/**
+ * v6.5: Bir yoruma yanıt (reply) üretmek için prompt.
+ * [parentComment] yanıt verilen yorumdur; commenter ona hitaben cevap yazar.
+ */
+private fun MainActivity.buildMayagramReplyPrompt(
+    post: MayagramPost,
+    commenter: MayaCharacter,
+    parentComment: MayagramComment
+): String {
+    val parentLabel = if (parentComment.authorIsUser) "Kullanıcı (${parentComment.authorName})" else parentComment.authorName
+    val instruction = buildString {
+        appendLine("Sen ${commenter.name} karakterisin. ${commenter.systemPrompt}")
+        appendLine()
+        appendLine("${post.characterName} şu gönderiyi paylaştı:")
+        appendLine("\"${post.caption}\"")
+        appendLine()
+        appendLine("$parentLabel bu gönderiye şu yorumu yazdı:")
+        appendLine("\"${parentComment.content}\"")
+        appendLine()
+        append("$parentLabel'e karakterine uygun, kısa ve samimi bir yanıt yaz (tek cümle, emoji kullanabilirsin, doğal bir sohbet gibi). Sadece yanıt metnini yaz, başka hiçbir şey ekleme:")
     }
     return buildMayagramPrompt(instruction)
 }
