@@ -547,7 +547,7 @@ class MayagramActivity : AppCompatActivity() {
         }
         val replyBannerCancel = TextView(this).apply {
             text = "✕"; textSize = 14f; setPadding((8*dp).toInt(), 0, (4*dp).toInt(), 0)
-            clickable = true; isFocusable = true
+            isclickable = true; isFocusable = true
         }
         replyBanner.addView(replyBannerText)
         replyBanner.addView(replyBannerCancel)
