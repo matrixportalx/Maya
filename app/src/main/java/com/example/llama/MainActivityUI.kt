@@ -386,6 +386,8 @@ internal fun MainActivity.showLogsDialog() {
         .setNegativeButton(if (MainActivity.loggingEnabled) "🟢 Loglamayı Kapat" else "🔴 Loglamayı Aç") { _, _ ->
             MainActivity.loggingEnabled = !MainActivity.loggingEnabled
             Toast.makeText(this, if (MainActivity.loggingEnabled) "Loglama açıldı" else "Loglama kapatıldı", Toast.LENGTH_SHORT).show()
+            getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("logging_enabled", MainActivity.loggingEnabled).apply()
         }.show()
 }
 
@@ -425,6 +427,8 @@ internal fun MainActivity.showLogsDialogWithSearchButton() {
             .setNegativeButton(if (MainActivity.loggingEnabled) "🟢 Loglamayı Kapat" else "🔴 Loglamayı Aç") { _, _ ->
                 MainActivity.loggingEnabled = !MainActivity.loggingEnabled
                 Toast.makeText(this, if (MainActivity.loggingEnabled) "Loglama açıldı" else "Loglama kapatıldı", Toast.LENGTH_SHORT).show()
+                getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+                    .edit().putBoolean("logging_enabled", MainActivity.loggingEnabled).apply()
             }
             .also { builder ->
                 val d = builder.create(); d.show()
@@ -443,6 +447,8 @@ internal fun MainActivity.showLogsDialogWithSearchButton() {
         .setNegativeButton(if (MainActivity.loggingEnabled) "🟢 Loglamayı Kapat" else "🔴 Loglamayı Aç") { _, _ ->
             MainActivity.loggingEnabled = !MainActivity.loggingEnabled
             Toast.makeText(this, if (MainActivity.loggingEnabled) "Loglama açıldı" else "Loglama kapatıldı", Toast.LENGTH_SHORT).show()
+            getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("logging_enabled", MainActivity.loggingEnabled).apply()
         }.show()
 }
 
