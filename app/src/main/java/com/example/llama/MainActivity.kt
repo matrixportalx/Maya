@@ -387,6 +387,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+        loggingEnabled = prefs.getBoolean("logging_enabled", false)
         appThemeMode = prefs.getInt("app_theme_mode", THEME_SYSTEM)
         applyThemeMode(appThemeMode)
 
