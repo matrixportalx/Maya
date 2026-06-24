@@ -105,7 +105,6 @@ internal fun MainActivity.performBackupToUri(
     val activity = this
     lifecycleScope.launch(Dispatchers.IO) {
         try {
-            android.widget.Toast.makeText(activity, "Yedekleme hazırlanıyor…", android.widget.Toast.LENGTH_SHORT).show()
             val jsonText = activity.buildBackupJson(inclConvs, inclSettings, inclMayagram)
             val conversations = if (inclConvs) activity.db.chatDao().getAllConversationsList() else emptyList()
             val mayagramPostCount = if (inclMayagram) activity.db.mayagramDao().postCount() else 0
