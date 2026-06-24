@@ -1,4 +1,4 @@
-package tr.maya
+package com.example.llama
 
 import android.app.AlertDialog
 import android.content.Context
@@ -33,6 +33,12 @@ import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+// Veri sınıfları (projenizdeki gerçek paketle eşleştiğinden emin olun)
+import tr.maya.data.Conversation
+import tr.maya.data.DbMessage
+import tr.maya.data.MayagramPost
+import tr.maya.data.MayagramComment
 
 // ── Yedekleme ─────────────────────────────────────────────────────────────────
 
@@ -438,14 +444,11 @@ internal suspend fun MainActivity.buildBackupZip(
     inclSettings: Boolean,
     inclMayagram: Boolean
 ): ByteArray {
-    // 1. JSON'u oluştur
     val jsonText = buildBackupJson(inclConvs, inclSettings, inclMayagram)
     val jsonBytes = jsonText.toByteArray(Charsets.UTF_8)
 
-    // 2. Toplanacak dosyaları belirle
-    val filesToZip = mutableListOf<Pair<String, File>>() // (zip içindeki yol, kaynak dosya)
+    val filesToZip = mutableListOf<Pair<String, File>>()
 
-    // Karakter avatarları (settings'ten alınan characters_json içindeki file: URI'leri)
     if (inclSettings) {
         val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         val charactersJson = prefs.getString("characters_json", null) ?: "[]"
@@ -468,7 +471,6 @@ internal suspend fun MainActivity.buildBackupZip(
         }
     }
 
-    // Mayagram gönderi görselleri
     if (inclMayagram) {
         val posts = db.mayagramDao().getAllPostsList()
         for (post in posts) {
@@ -482,15 +484,12 @@ internal suspend fun MainActivity.buildBackupZip(
         }
     }
 
-    // 3. ZIP oluştur
     val baos = ByteArrayOutputStream()
     ZipOutputStream(baos).use { zos ->
-        // JSON'u ekle
         zos.putNextEntry(ZipEntry("backup.json"))
         zos.write(jsonBytes)
         zos.closeEntry()
 
-        // Dosyaları ekle
         for ((zipPath, file) in filesToZip) {
             zos.putNextEntry(ZipEntry(zipPath))
             file.inputStream().use { input ->
@@ -772,8 +771,7 @@ internal suspend fun MainActivity.importJsonBackup(
                 }
             }
 
-            val mayagramImagesDir =
-                File(activity.getExternalFilesDir(null) ?: activity.filesDir, "Mayagram").also { it.mkdirs() }
+            val mayagramImagesDir = backupGetMayagramImagesDir()
             val postIdMap = mutableMapOf<String, String>()
 
             for (i in 0 until postsArray.length()) {
@@ -854,7 +852,6 @@ internal suspend fun MainActivity.importJsonBackup(
                 .setPositiveButton("Tamam", null).show()
         }
 
-        // Geçici dizini temizle
         tempDir?.deleteRecursively()
 
     } catch (e: Exception) {
@@ -865,15 +862,18 @@ internal suspend fun MainActivity.importJsonBackup(
     }
 }
 
-// ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────
+// ── Yardımcı fonksiyonlar (çakışma olmaması için yeniden adlandırıldı) ──
 
-private fun MainActivity.getCharacterAvatarsDir(): File =
+private fun MainActivity.backupGetCharacterAvatarsDir(): File =
     File(getExternalFilesDir(null) ?: filesDir, "character_avatars").also { it.mkdirs() }
+
+private fun MainActivity.backupGetMayagramImagesDir(): File =
+    File(getExternalFilesDir(null) ?: filesDir, "Mayagram").also { it.mkdirs() }
 
 private fun MainActivity.restoreCharacterAvatars(charactersJson: String, tempDir: File): String {
     return try {
         val arr = JSONArray(charactersJson)
-        val avatarsDir = getCharacterAvatarsDir()
+        val avatarsDir = backupGetCharacterAvatarsDir()
         for (i in 0 until arr.length()) {
             val obj = arr.getJSONObject(i)
             val avatarUri = obj.optString("avatar_uri", "")
