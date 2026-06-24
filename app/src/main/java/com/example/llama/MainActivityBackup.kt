@@ -34,7 +34,6 @@ import javax.crypto.spec.SecretKeySpec
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-// Veri sınıfları (projenizdeki gerçek paketle eşleştiğinden emin olun)
 import tr.maya.data.Conversation
 import tr.maya.data.DbMessage
 import tr.maya.data.MayagramPost
@@ -237,7 +236,6 @@ internal fun MainActivity.handleRestoreFile(uri: Uri) {
                 bytes
             }
 
-            // ZIP'i geçici klasöre aç
             val tempDir =
                 File(activity.cacheDir, "restore_temp_${System.currentTimeMillis()}").also { it.mkdirs() }
             try {
@@ -862,7 +860,7 @@ internal suspend fun MainActivity.importJsonBackup(
     }
 }
 
-// ── Yardımcı fonksiyonlar (çakışma olmaması için yeniden adlandırıldı) ──
+// ── Yardımcı fonksiyonlar (çakışmayı önlemek için yeniden adlandırıldı) ──
 
 private fun MainActivity.backupGetCharacterAvatarsDir(): File =
     File(getExternalFilesDir(null) ?: filesDir, "character_avatars").also { it.mkdirs() }
