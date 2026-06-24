@@ -314,7 +314,6 @@ class MainActivity : AppCompatActivity() {
 
                 val entry = "uri:$uri"
                 val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
-                loggingEnabled = prefs.getBoolean("logging_enabled", false)
                 val models = prefs.getStringSet("saved_models", mutableSetOf())!!.toMutableSet()
                 models.add(entry)
                 prefs.edit().putStringSet("saved_models", models).apply()
