@@ -22,6 +22,9 @@ interface MayagramDao {
     @Query("SELECT * FROM mayagram_posts WHERE characterId = :charId ORDER BY timestamp DESC")
     suspend fun getPostsByCharacter(charId: String): List<MayagramPost>
 
+    @Query("SELECT * FROM mayagram_posts WHERE id = :postId LIMIT 1")
+    suspend fun getPostById(postId: String): MayagramPost?
+
     @Query("DELETE FROM mayagram_posts WHERE id = :postId")
     suspend fun deletePost(postId: String)
 
@@ -38,6 +41,10 @@ interface MayagramDao {
 
     @Query("SELECT * FROM mayagram_comments WHERE postId = :postId ORDER BY timestamp ASC")
     suspend fun getComments(postId: String): List<MayagramComment>
+
+    /** v6.5: Tek bir yorumu ID'siyle bul — yanıt zincirinde "bu yoruma kim yanıt verecek" tespiti için */
+    @Query("SELECT * FROM mayagram_comments WHERE id = :commentId LIMIT 1")
+    suspend fun getCommentById(commentId: String): MayagramComment?
 
     @Query("SELECT COUNT(*) FROM mayagram_comments WHERE postId = :postId")
     suspend fun commentCount(postId: String): Int
