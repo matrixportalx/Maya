@@ -79,6 +79,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private val logBuffer = ArrayDeque<String>(200)
         var loggingEnabled: Boolean = false
+        getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+            .edit().putBoolean("logging_enabled", loggingEnabled).apply()
 
         /**
          * v6.2: MayagramActivity'nin LLM + Dream API fonksiyonlarına erişebilmesi için
