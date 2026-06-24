@@ -22,9 +22,11 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.security.SecureRandom
 import java.util.UUID
 import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -39,39 +41,39 @@ internal fun MainActivity.backupChats() {
     val scrollView = ScrollView(this)
     val layout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding((20*dp).toInt(), (16*dp).toInt(), (20*dp).toInt(), (8*dp).toInt())
+        setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), (8 * dp).toInt())
     }
     scrollView.addView(layout)
 
     layout.addView(TextView(this).apply {
         text = "Neleri yedeklemek istiyorsunuz?"; textSize = 13f; alpha = 0.7f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8 * dp).toInt() }
     })
 
     fun makeCheckBox(label: String, checked: Boolean = true): android.widget.CheckBox =
         android.widget.CheckBox(this).apply {
             text = label; isChecked = checked
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4 * dp).toInt() }
         }
 
     val cbConversations = makeCheckBox("💬 Sohbetler")
-    val cbSettings      = makeCheckBox("⚙️ Ayarlar & Karakterler")
-    val cbMayagram      = makeCheckBox("📸 Mayagram (gönderiler, yorumlar, görseller)")
+    val cbSettings = makeCheckBox("⚙️ Ayarlar & Karakterler")
+    val cbMayagram = makeCheckBox("📸 Mayagram (gönderiler, yorumlar, görseller)")
     layout.addView(cbConversations); layout.addView(cbSettings); layout.addView(cbMayagram)
 
     layout.addView(TextView(this).apply {
-        text = "Görseller ayrı dosyalar olarak ZIP içinde yedeklenir."
+        text = "Mayagram görselleri ve karakter avatarları ZIP içinde ayrı dosyalar olarak yedeklenir."
         textSize = 11f; alpha = 0.55f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (2*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (2 * dp).toInt() }
     })
 
     layout.addView(View(this).apply {
         setBackgroundColor(0x22888888)
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1*dp).toInt()).apply { topMargin = (12*dp).toInt(); bottomMargin = (12*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()).apply { topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt() }
     })
     layout.addView(TextView(this).apply {
         text = "Şifreleme (isteğe bağlı)"; textSize = 13f; alpha = 0.7f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6 * dp).toInt() }
     })
     val passwordInput = android.widget.EditText(this).apply {
         hint = "Şifre — boş bırakırsanız şifresiz kaydedilir"
@@ -81,13 +83,15 @@ internal fun MainActivity.backupChats() {
 
     AlertDialog.Builder(this).setTitle("💾 Yedekleme").setView(scrollView)
         .setPositiveButton("Yedekle") { _, _ ->
-            val inclConvs    = cbConversations.isChecked
+            val inclConvs = cbConversations.isChecked
             val inclSettings = cbSettings.isChecked
             val inclMayagram = cbMayagram.isChecked
-            if (!inclConvs && !inclSettings && !inclMayagram) { Toast.makeText(this, "En az bir seçenek işaretleyin", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
-            val password    = passwordInput.text.toString()
+            if (!inclConvs && !inclSettings && !inclMayagram) {
+                Toast.makeText(this, "En az bir seçenek işaretleyin", Toast.LENGTH_SHORT).show(); return@setPositiveButton
+            }
+            val password = passwordInput.text.toString()
             val isEncrypted = password.isNotEmpty()
-            val suffix      = buildString { if (inclConvs) append("s"); if (inclSettings) append("a"); if (inclMayagram) append("m") }
+            val suffix = buildString { if (inclConvs) append("s"); if (inclSettings) append("a"); if (inclMayagram) append("m") }
             val fileName = "maya_yedek_${suffix}_${System.currentTimeMillis()}.${if (isEncrypted) "maya" else "zip"}"
             pendingBackupCallback = { uri -> performBackupToUri(uri, password, isEncrypted, inclConvs, inclSettings, inclMayagram) }
             backupSaveLauncher.launch(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
@@ -98,61 +102,31 @@ internal fun MainActivity.backupChats() {
         }.setNegativeButton("İptal", null).show()
 }
 
-internal fun MainActivity.performBackupToUri(
-    uri: Uri,
-    password: String,
-    encrypt: Boolean,
-    inclConvs: Boolean,
-    inclSettings: Boolean,
-    inclMayagram: Boolean = false
-) {
-    val activity = this
-    lifecycleScope.launch(Dispatchers.IO) {
-        try {
-            // ZIP byte'larını oluştur
-            val zipData = activity.buildBackupZip(inclConvs, inclSettings, inclMayagram)
-            val outputData = if (encrypt) {
-                encryptBackup(zipData, password)
-            } else {
-                zipData
-            }
+// ── Yardımcı dizin fonksiyonları ──────────────────────────────────────────
 
-            activity.contentResolver.openOutputStream(uri)?.use { out ->
-                out.write(outputData)
-            } ?: throw Exception("Dosya yazılamadı")
-
-            withContext(Dispatchers.Main) {
-                val parts = buildList {
-                    if (inclConvs) add("${activity.db.chatDao().getAllConversationsList().size} sohbet")
-                    if (inclSettings) add("ayarlar & karakterler")
-                    if (inclMayagram) add("${activity.db.mayagramDao().postCount()} Mayagram gönderisi")
-                }
-                Toast.makeText(activity, "${parts.joinToString(", ")} yedeklendi${if (encrypt) " (AES-256 şifreli)" else ""}", Toast.LENGTH_LONG).show()
-            }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                Toast.makeText(activity, "Yedekleme hatası: ${e.message}", Toast.LENGTH_LONG).show()
-                MainActivity.log("BackupError", e.stackTraceToString())
-            }
-        }
-    }
+private fun MainActivity.getCharacterAvatarsDir(): File {
+    return File(getExternalFilesDir(null) ?: filesDir, "character_avatars").also { it.mkdirs() }
 }
 
-// ── ZIP oluşturma ────────────────────────────────────────────────────────────
+private fun MainActivity.getMayagramImagesDir(): File {
+    return File(getExternalFilesDir(null) ?: filesDir, "Mayagram").also { it.mkdirs() }
+}
+
+// ── Yedekleme (ZIP) ─────────────────────────────────────────────────────────
 
 internal suspend fun MainActivity.buildBackupZip(
     inclConvs: Boolean,
     inclSettings: Boolean,
     inclMayagram: Boolean
 ): ByteArray {
-    // 1. JSON verilerini oluştur
+    // 1. JSON'u oluştur (resimler hariç)
     val jsonText = buildBackupJson(inclConvs, inclSettings, inclMayagram)
     val jsonBytes = jsonText.toByteArray(Charsets.UTF_8)
 
-    // 2. Toplanacak dosyaları belirle (zip içindeki yol -> kaynak dosya)
+    // 2. Toplanacak dosyalar: (zip içindeki yol, kaynak dosya)
     val filesToZip = mutableListOf<Pair<String, File>>()
 
-    // Karakter avatarları (settings'ten alınan characters_json içindeki file: URI'leri)
+    // Karakter avatarları
     if (inclSettings) {
         val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         val charactersJson = prefs.getString("characters_json", null) ?: "[]"
@@ -165,8 +139,7 @@ internal suspend fun MainActivity.buildBackupZip(
                     val path = avatarUri.removePrefix("file:")
                     val file = File(path)
                     if (file.exists()) {
-                        // ZIP içinde benzersiz isim kullan, orijinal dosya adını koru
-                        val uniqueName = "avatars/${file.name}"
+                        val uniqueName = "avatars/${UUID.randomUUID()}_${file.name}"
                         filesToZip.add(uniqueName to file)
                     }
                 }
@@ -183,8 +156,8 @@ internal suspend fun MainActivity.buildBackupZip(
             post.imagePath?.let { path ->
                 val file = File(path)
                 if (file.exists()) {
-                    val zipPath = "mayagram_images/${file.name}"
-                    filesToZip.add(zipPath to file)
+                    val uniqueName = "mayagram_images/${UUID.randomUUID()}_${file.name}"
+                    filesToZip.add(uniqueName to file)
                 }
             }
         }
@@ -201,7 +174,7 @@ internal suspend fun MainActivity.buildBackupZip(
         // Dosyaları ekle
         for ((zipPath, file) in filesToZip) {
             zos.putNextEntry(ZipEntry(zipPath))
-            file.inputStream().use { input ->
+            FileInputStream(file).use { input ->
                 input.copyTo(zos)
             }
             zos.closeEntry()
@@ -209,8 +182,6 @@ internal suspend fun MainActivity.buildBackupZip(
     }
     return baos.toByteArray()
 }
-
-// ── Yedek JSON oluştur (sadece metin) ──────────────────────────────────────
 
 internal suspend fun MainActivity.buildBackupJson(
     inclConvs: Boolean = true,
@@ -308,36 +279,48 @@ internal suspend fun MainActivity.buildBackupJson(
     return root.toString(2)
 }
 
-// ── Şifreleme / Çözme (byte[] üzerinde çalışır) ────────────────────────────
+// ── Yedekleme (ZIP) ─────────────────────────────────────────────────────────
 
-internal fun encryptBackup(data: ByteArray, password: String): ByteArray {
-    val rng = SecureRandom()
-    val salt = ByteArray(16).also { rng.nextBytes(it) }
-    val iv   = ByteArray(12).also { rng.nextBytes(it) }
-    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-    val keyBytes = factory.generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
-    return "MAYA".toByteArray() + salt + iv + cipher.doFinal(data)
+internal fun MainActivity.performBackupToUri(
+    uri: Uri,
+    password: String,
+    encrypt: Boolean,
+    inclConvs: Boolean,
+    inclSettings: Boolean,
+    inclMayagram: Boolean = false
+) {
+    val activity = this
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val zipData = activity.buildBackupZip(inclConvs, inclSettings, inclMayagram)
+            val outputData = if (encrypt) {
+                encryptBackup(zipData, password)
+            } else {
+                zipData
+            }
+
+            activity.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(outputData)
+            } ?: throw Exception("Dosya yazılamadı")
+
+            withContext(Dispatchers.Main) {
+                val parts = buildList {
+                    if (inclConvs) add("${db.chatDao().getAllConversationsList().size} sohbet")
+                    if (inclSettings) add("ayarlar & karakterler")
+                    if (inclMayagram) add("${db.mayagramDao().postCount()} Mayagram gönderisi")
+                }
+                Toast.makeText(activity, "${parts.joinToString(", ")} yedeklendi${if (encrypt) " (AES-256 şifreli)" else ""}", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(activity, "Yedekleme hatası: ${e.message}", Toast.LENGTH_LONG).show()
+                MainActivity.log("BackupError", e.stackTraceToString())
+            }
+        }
+    }
 }
 
-internal fun decryptBackup(data: ByteArray, password: String): ByteArray {
-    require(data.size > 32) { "Geçersiz yedek dosyası" }
-    require(String(data.slice(0..3).toByteArray()) == "MAYA") { "Bu dosya Maya yedek dosyası değil" }
-    val salt = data.slice(4..19).toByteArray()
-    val iv   = data.slice(20..31).toByteArray()
-    val enc  = data.slice(32 until data.size).toByteArray()
-    val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        .generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
-    return cipher.doFinal(enc)
-}
-
-internal fun isEncryptedBackup(data: ByteArray): Boolean =
-    data.size >= 4 && String(data.slice(0..3).toByteArray()) == "MAYA"
-
-// ── Geri yükleme ─────────────────────────────────────────────────────────────
+// ── Geri Yükleme ────────────────────────────────────────────────────────────
 
 internal fun MainActivity.showRestorePicker() {
     backupRestoreLauncher.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -351,68 +334,86 @@ internal fun MainActivity.handleRestoreFile(uri: Uri) {
         try {
             val bytes = activity.contentResolver.openInputStream(uri)?.readBytes() ?: throw Exception("Dosya okunamadı")
             val zipData = if (isEncryptedBackup(bytes)) {
-                // Şifre iste
-                val password = withContext(Dispatchers.Main) {
-                    suspendCancellableCoroutine { continuation ->
-                        val passInput = android.widget.EditText(activity).apply {
-                            hint = "Yedekleme şifresi"
-                            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-                            setPadding(48, 24, 48, 24)
-                        }
-                        AlertDialog.Builder(activity).setTitle("🔐 Şifreli Yedek")
-                            .setMessage("Bu yedek şifrelenmiş. Şifreyi girin:").setView(passInput)
-                            .setPositiveButton("Çöz") { _, _ ->
-                                val pass = passInput.text.toString()
-                                if (pass.isEmpty()) {
-                                    Toast.makeText(activity, "Şifre boş olamaz", Toast.LENGTH_SHORT).show()
-                                    continuation.resumeWith(Result.failure(Exception("Şifre boş")))
-                                    return@setPositiveButton
-                                }
-                                try {
-                                    continuation.resume(pass)
-                                } catch (e: Exception) {
-                                    Toast.makeText(activity, "Şifre çözme hatası.", Toast.LENGTH_LONG).show()
-                                    continuation.resumeWith(Result.failure(e))
-                                }
-                            }.setNegativeButton("İptal") { _, _ ->
-                                continuation.resumeWith(Result.failure(Exception("İptal edildi")))
-                            }.show()
+                // Şifre iste (callback ile)
+                var decrypted: ByteArray? = null
+                withContext(Dispatchers.Main) {
+                    val passInput = android.widget.EditText(activity).apply {
+                        hint = "Yedekleme şifresi"
+                        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                        setPadding(48, 24, 48, 24)
                     }
+                    AlertDialog.Builder(activity).setTitle("🔐 Şifreli Yedek")
+                        .setMessage("Bu yedek şifrelenmiş. Şifreyi girin:").setView(passInput)
+                        .setPositiveButton("Çöz") { _, _ ->
+                            val pass = passInput.text.toString()
+                            if (pass.isEmpty()) {
+                                Toast.makeText(activity, "Şifre boş olamaz", Toast.LENGTH_SHORT).show()
+                                return@setPositiveButton
+                            }
+                            activity.lifecycleScope.launch(Dispatchers.IO) {
+                                try {
+                                    val decryptedData = decryptBackup(bytes, pass)
+                                    withContext(Dispatchers.Main) {
+                                        // Başarılı, devam et
+                                        activity.processRestoreZip(decryptedData)
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(activity, "Şifre çözme hatası.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
+                        }.setNegativeButton("İptal", null).show()
                 }
-                decryptBackup(bytes, password)
+                return@launch // Şifre dialog'dan sonra işlem devam edecek
             } else {
-                bytes
+                bytes // şifresiz ise doğrudan ZIP
             }
 
-            // ZIP'i geçici bir klasöre aç
+            // Şifresiz veya çözülmüş ZIP'i işle
+            processRestoreZip(zipData)
+
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(activity, "Dosya okuma hatası: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+private fun MainActivity.processRestoreZip(zipData: ByteArray) {
+    val activity = this
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            // Geçici dizin oluştur
             val tempDir = File(activity.cacheDir, "restore_temp_${System.currentTimeMillis()}")
             tempDir.mkdirs()
-            try {
-                java.util.zip.ZipFile(ByteArrayInputStream(zipData)).use { zip ->
-                    zip.entries().asSequence().forEach { entry ->
-                        val destFile = File(tempDir, entry.name)
-                        destFile.parentFile?.mkdirs()
-                        zip.getInputStream(entry).use { input ->
-                            destFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
+
+            // ZIP'i aç (ZipInputStream ile)
+            ZipInputStream(ByteArrayInputStream(zipData)).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
+                while (entry != null) {
+                    val destFile = File(tempDir, entry.name)
+                    destFile.parentFile?.mkdirs()
+                    destFile.outputStream().use { output ->
+                        zis.copyTo(output)
                     }
+                    entry = zis.nextEntry
                 }
-            } catch (e: Exception) {
-                throw Exception("ZIP açma hatası: ${e.message}")
             }
 
+            // JSON'u oku
             val jsonFile = File(tempDir, "backup.json")
             if (!jsonFile.exists()) throw Exception("backup.json bulunamadı")
             val jsonText = jsonFile.readText(Charsets.UTF_8)
 
+            // Geri yükleme seçeneklerini göster
             withContext(Dispatchers.Main) {
                 activity.showRestoreSelectionDialog(jsonText, tempDir)
             }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(activity, "Geri yükleme hatası: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(activity, "ZIP açma hatası: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -423,66 +424,66 @@ internal fun MainActivity.showRestoreSelectionDialog(jsonText: String, tempDir: 
     val root = try { JSONObject(jsonText) } catch (e: Exception) {
         Toast.makeText(this, "Geçersiz yedek dosyası", Toast.LENGTH_LONG).show(); return
     }
-    val version     = root.optInt("version", 1)
-    val hasConvs    = root.has("conversations") && root.getJSONArray("conversations").length() > 0
+    val version = root.optInt("version", 1)
+    val hasConvs = root.has("conversations") && root.getJSONArray("conversations").length() > 0
     val hasSettings = version >= 3 && root.has("settings")
     val hasMayagram = version >= 5 && root.has("mayagram") && root.getJSONObject("mayagram").optJSONArray("posts")?.length() ?: 0 > 0
-    val convCount   = if (hasConvs) root.getJSONArray("conversations").length() else 0
+    val convCount = if (hasConvs) root.getJSONArray("conversations").length() else 0
     val reportCount = if (hasSettings && version >= 4) {
         root.optJSONObject("settings")?.optJSONArray("report_profiles_json")?.length() ?: 0
     } else 0
-    val mayagramPostCount    = if (hasMayagram) root.getJSONObject("mayagram").optJSONArray("posts")?.length() ?: 0 else 0
+    val mayagramPostCount = if (hasMayagram) root.getJSONObject("mayagram").optJSONArray("posts")?.length() ?: 0 else 0
     val mayagramCommentCount = if (hasMayagram) root.getJSONObject("mayagram").optJSONArray("comments")?.length() ?: 0 else 0
 
     val dp = resources.displayMetrics.density
     val scrollView = ScrollView(this)
     val layout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding((20*dp).toInt(), (16*dp).toInt(), (20*dp).toInt(), (8*dp).toInt())
+        setPadding((20 * dp).toInt(), (16 * dp).toInt(), (20 * dp).toInt(), (8 * dp).toInt())
     }
     scrollView.addView(layout)
 
     layout.addView(TextView(this).apply {
         text = buildString {
             append("Bu yedek dosyasında:\n")
-            if (hasConvs)    append("  • $convCount sohbet\n")
+            if (hasConvs) append("  • $convCount sohbet\n")
             if (hasSettings) append("  • Ayarlar & Karakterler\n")
             if (reportCount > 0) append("  • $reportCount rapor profili\n")
             if (hasMayagram) append("  • $mayagramPostCount Mayagram gönderisi, $mayagramCommentCount yorum\n")
             if (!hasConvs && !hasSettings && !hasMayagram) append("  • (Tanınmayan format)\n")
         }
         textSize = 13f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (12 * dp).toInt() }
     })
     layout.addView(TextView(this).apply {
         text = "Neleri geri yüklemek istiyorsunuz?"; textSize = 13f; alpha = 0.7f
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8 * dp).toInt() }
     })
 
     fun makeCheckBox(label: String, enabled: Boolean): android.widget.CheckBox =
         android.widget.CheckBox(this).apply {
             text = label; isChecked = enabled; isEnabled = enabled
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4 * dp).toInt() }
         }
 
-    val cbConvs     = makeCheckBox("💬 Sohbetler ($convCount adet)", hasConvs)
-    val cbSettings  = makeCheckBox("⚙️ Ayarlar & Karakterler", hasSettings)
-    val cbMayagram  = makeCheckBox("📸 Mayagram ($mayagramPostCount gönderi, $mayagramCommentCount yorum)", hasMayagram)
+    val cbConvs = makeCheckBox("💬 Sohbetler ($convCount adet)", hasConvs)
+    val cbSettings = makeCheckBox("⚙️ Ayarlar & Karakterler", hasSettings)
+    val cbMayagram = makeCheckBox("📸 Mayagram ($mayagramPostCount gönderi, $mayagramCommentCount yorum)", hasMayagram)
     layout.addView(cbConvs); layout.addView(cbSettings); layout.addView(cbMayagram)
 
     var mergeConvs = false
     if (hasConvs) {
         layout.addView(View(this).apply {
             setBackgroundColor(0x22888888)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1*dp).toInt()).apply { topMargin = (12*dp).toInt(); bottomMargin = (12*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()).apply { topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt() }
         })
         layout.addView(TextView(this).apply {
             text = "Sohbet geri yükleme yöntemi:"; textSize = 13f; alpha = 0.7f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6 * dp).toInt() }
         })
         val rg = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         val rbOverwrite = RadioButton(this).apply { text = "Mevcut sohbetlerin üzerine yaz"; id = View.generateViewId(); isChecked = true }
-        val rbMerge     = RadioButton(this).apply { text = "Mevcut sohbetlere ekle (birleştir)"; id = View.generateViewId() }
+        val rbMerge = RadioButton(this).apply { text = "Mevcut sohbetlere ekle (birleştir)"; id = View.generateViewId() }
         rg.addView(rbOverwrite); rg.addView(rbMerge)
         rg.setOnCheckedChangeListener { _, checkedId -> mergeConvs = (checkedId == rbMerge.id) }
         layout.addView(rg)
@@ -492,14 +493,14 @@ internal fun MainActivity.showRestoreSelectionDialog(jsonText: String, tempDir: 
     if (hasMayagram) {
         layout.addView(View(this).apply {
             setBackgroundColor(0x22888888)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1*dp).toInt()).apply { topMargin = (12*dp).toInt(); bottomMargin = (12*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (1 * dp).toInt()).apply { topMargin = (12 * dp).toInt(); bottomMargin = (12 * dp).toInt() }
         })
         layout.addView(TextView(this).apply {
             text = "Mayagram geri yükleme yöntemi:"; textSize = 13f; alpha = 0.7f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6*dp).toInt() }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (6 * dp).toInt() }
         })
         val rgM = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
-        val rbMergeM     = RadioButton(this).apply { text = "Mevcut akışa ekle (birleştir)"; id = View.generateViewId(); isChecked = true }
+        val rbMergeM = RadioButton(this).apply { text = "Mevcut akışa ekle (birleştir)"; id = View.generateViewId(); isChecked = true }
         val rbOverwriteM = RadioButton(this).apply { text = "Mevcut Mayagram akışının üzerine yaz"; id = View.generateViewId() }
         rgM.addView(rbMergeM); rgM.addView(rbOverwriteM)
         rgM.setOnCheckedChangeListener { _, checkedId -> mergeMayagram = (checkedId == rbMergeM.id) }
@@ -508,15 +509,19 @@ internal fun MainActivity.showRestoreSelectionDialog(jsonText: String, tempDir: 
 
     AlertDialog.Builder(this).setTitle("📂 Geri Yükleme Seçenekleri").setView(scrollView)
         .setPositiveButton("Geri Yükle") { _, _ ->
-            val doConvs    = cbConvs.isChecked
+            val doConvs = cbConvs.isChecked
             val doSettings = cbSettings.isChecked
             val doMayagram = cbMayagram.isChecked
-            if (!doConvs && !doSettings && !doMayagram) { Toast.makeText(this, "En az bir seçenek işaretleyin", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+            if (!doConvs && !doSettings && !doMayagram) {
+                Toast.makeText(this, "En az bir seçenek işaretleyin", Toast.LENGTH_SHORT).show(); return@setPositiveButton
+            }
             activity.lifecycleScope.launch(Dispatchers.IO) {
                 activity.importJsonBackup(jsonText, doConvs, doSettings, mergeConvs, doMayagram, mergeMayagram, tempDir)
             }
         }.setNegativeButton("İptal", null).show()
 }
+
+// ── Geri yükleme ────────────────────────────────────────────────────────────
 
 internal suspend fun MainActivity.importJsonBackup(
     jsonText: String,
@@ -529,33 +534,34 @@ internal suspend fun MainActivity.importJsonBackup(
 ) {
     val activity = this
     try {
-        val root    = JSONObject(jsonText)
+        val root = JSONObject(jsonText)
         val version = root.optInt("version", 1)
-        val prefs   = activity.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+        val prefs = activity.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         var settingsRestored = false
-        var convCount        = 0
-        var msgCount         = 0
+        var convCount = 0
+        var msgCount = 0
         var mayagramPostCount = 0
         var mayagramCommentCount = 0
 
+        // --- Ayarlar ---
         if (doSettings && version >= 3 && root.has("settings")) {
             val s = root.getJSONObject("settings")
             val editor = prefs.edit()
-            if (s.has("context_size"))         editor.putInt("context_size", s.getInt("context_size"))
-            if (s.has("predict_length"))        editor.putInt("predict_length", s.getInt("predict_length"))
-            if (s.has("system_prompt"))         editor.putString("system_prompt", s.getString("system_prompt"))
-            if (s.has("temperature"))           editor.putFloat("temperature", s.getDouble("temperature").toFloat())
-            if (s.has("top_p"))                 editor.putFloat("top_p", s.getDouble("top_p").toFloat())
-            if (s.has("top_k"))                 editor.putInt("top_k", s.getInt("top_k"))
-            if (s.has("no_thinking"))           editor.putBoolean("no_thinking", s.getBoolean("no_thinking"))
-            if (s.has("auto_load_last_model"))  editor.putBoolean("auto_load_last_model", s.getBoolean("auto_load_last_model"))
-            if (s.has("flash_attn_mode"))       editor.putInt("flash_attn_mode", s.getInt("flash_attn_mode"))
-            else if (s.has("flash_attn"))       editor.putInt("flash_attn_mode", if (s.getBoolean("flash_attn")) 2 else 0)
-            if (s.has("char_name"))             editor.putString("char_name", s.getString("char_name"))
-            if (s.has("user_name"))             editor.putString("user_name", s.getString("user_name"))
+            if (s.has("context_size")) editor.putInt("context_size", s.getInt("context_size"))
+            if (s.has("predict_length")) editor.putInt("predict_length", s.getInt("predict_length"))
+            if (s.has("system_prompt")) editor.putString("system_prompt", s.getString("system_prompt"))
+            if (s.has("temperature")) editor.putFloat("temperature", s.getDouble("temperature").toFloat())
+            if (s.has("top_p")) editor.putFloat("top_p", s.getDouble("top_p").toFloat())
+            if (s.has("top_k")) editor.putInt("top_k", s.getInt("top_k"))
+            if (s.has("no_thinking")) editor.putBoolean("no_thinking", s.getBoolean("no_thinking"))
+            if (s.has("auto_load_last_model")) editor.putBoolean("auto_load_last_model", s.getBoolean("auto_load_last_model"))
+            if (s.has("flash_attn_mode")) editor.putInt("flash_attn_mode", s.getInt("flash_attn_mode"))
+            else if (s.has("flash_attn")) editor.putInt("flash_attn_mode", if (s.getBoolean("flash_attn")) 2 else 0)
+            if (s.has("char_name")) editor.putString("char_name", s.getString("char_name"))
+            if (s.has("user_name")) editor.putString("user_name", s.getString("user_name"))
             if (s.has("last_loaded_model") && s.getString("last_loaded_model").isNotEmpty())
                 editor.putString("last_loaded_model", s.getString("last_loaded_model"))
-            if (s.has("characters_json") && s.getString("characters_json").let { it.isNotEmpty() && it != "[]" }) {
+            if (s.has("characters_json")) {
                 var charactersJson = s.getString("characters_json")
                 if (tempDir != null) {
                     charactersJson = restoreCharacterAvatars(charactersJson, tempDir)
@@ -573,12 +579,13 @@ internal suspend fun MainActivity.importJsonBackup(
             settingsRestored = true
         }
 
+        // --- Sohbetler ---
         if (doConvs && root.has("conversations")) {
             val convsArray = root.getJSONArray("conversations")
             if (!mergeConvs) { activity.db.chatDao().deleteAllMessages(); activity.db.chatDao().deleteAllConversations() }
             for (i in 0 until convsArray.length()) {
                 val convObj = convsArray.getJSONObject(i)
-                val convId  = convObj.getString("id")
+                val convId = convObj.getString("id")
                 if (mergeConvs) {
                     val exists = try { activity.db.chatDao().getMessages(convId).isNotEmpty() } catch (_: Exception) { false }
                     val finalId = if (exists) UUID.randomUUID().toString() else convId
@@ -603,6 +610,7 @@ internal suspend fun MainActivity.importJsonBackup(
             }
         }
 
+        // --- Mayagram ---
         if (doMayagram && version >= 5 && root.has("mayagram")) {
             val mg = root.getJSONObject("mayagram")
             val postsArray = mg.optJSONArray("posts") ?: JSONArray()
@@ -617,7 +625,7 @@ internal suspend fun MainActivity.importJsonBackup(
                 }
             }
 
-            val mayagramImagesDir = File(activity.getExternalFilesDir(null) ?: activity.filesDir, "Mayagram").also { it.mkdirs() }
+            val mayagramImagesDir = getMayagramImagesDir()
             val postIdMap = mutableMapOf<String, String>()
 
             for (i in 0 until postsArray.length()) {
@@ -633,9 +641,13 @@ internal suspend fun MainActivity.importJsonBackup(
                 val imageFileName = postObj.optString("imageFileName", "")
                 if (imageFileName.isNotEmpty() && tempDir != null) {
                     val srcFile = File(tempDir, "mayagram_images/$imageFileName")
-                    if (srcFile.exists()) {
-                        val destFile = File(mayagramImagesDir, imageFileName)
-                        srcFile.copyTo(destFile, overwrite = true)
+                    // Eğer dosya yoksa, UUID eklenmiş olabilir, klasörü tara
+                    val actualFile = if (srcFile.exists()) srcFile else {
+                        File(tempDir, "mayagram_images").listFiles()?.find { it.name.endsWith(imageFileName) }
+                    }
+                    if (actualFile != null && actualFile.exists()) {
+                        val destFile = File(mayagramImagesDir, actualFile.name)
+                        actualFile.copyTo(destFile, overwrite = true)
                         imagePath = destFile.absolutePath
                     }
                 }
@@ -678,6 +690,7 @@ internal suspend fun MainActivity.importJsonBackup(
             }
         }
 
+        // UI güncelleme
         withContext(Dispatchers.Main) {
             if (doConvs) {
                 activity.currentMessages.clear()
@@ -694,7 +707,7 @@ internal suspend fun MainActivity.importJsonBackup(
                 .setPositiveButton("Tamam", null).show()
         }
 
-        // Geçici dosyaları temizle
+        // Geçici dizini temizle
         tempDir?.deleteRecursively()
 
     } catch (e: Exception) {
@@ -705,11 +718,7 @@ internal suspend fun MainActivity.importJsonBackup(
     }
 }
 
-// ── Yardımcı fonksiyonlar ──────────────────────────────────────────────────
-
-private fun MainActivity.getCharacterAvatarsDir(): File {
-    return File(getExternalFilesDir(null) ?: filesDir, "character_avatars").also { it.mkdirs() }
-}
+// ── Karakter avatar geri yükleme ──────────────────────────────────────────
 
 private fun MainActivity.restoreCharacterAvatars(charactersJson: String, tempDir: File): String {
     return try {
@@ -720,19 +729,15 @@ private fun MainActivity.restoreCharacterAvatars(charactersJson: String, tempDir
             val avatarUri = obj.optString("avatar_uri", "")
             if (avatarUri.startsWith("file:")) {
                 val fileName = File(avatarUri.removePrefix("file:")).name
+                // ZIP'te avatars/ klasöründe ara
                 val zipFile = File(tempDir, "avatars/$fileName")
-                if (zipFile.exists()) {
-                    val destFile = File(avatarsDir, fileName)
-                    zipFile.copyTo(destFile, overwrite = true)
+                val actualFile = if (zipFile.exists()) zipFile else {
+                    File(tempDir, "avatars").listFiles()?.find { it.name.endsWith(fileName) }
+                }
+                if (actualFile != null && actualFile.exists()) {
+                    val destFile = File(avatarsDir, actualFile.name)
+                    actualFile.copyTo(destFile, overwrite = true)
                     obj.put("avatar_uri", "file:${destFile.absolutePath}")
-                } else {
-                    // Dosya yoksa klasörde ara (farklı isimle kaydedilmiş olabilir)
-                    val avatarsDirInZip = File(tempDir, "avatars")
-                    avatarsDirInZip.listFiles()?.find { it.name.endsWith(fileName) }?.let {
-                        val destFile = File(avatarsDir, it.name)
-                        it.copyTo(destFile, overwrite = true)
-                        obj.put("avatar_uri", "file:${destFile.absolutePath}")
-                    }
                 }
             }
         }
@@ -742,3 +747,32 @@ private fun MainActivity.restoreCharacterAvatars(charactersJson: String, tempDir
         charactersJson
     }
 }
+
+// ── Şifreleme / Çözme ──────────────────────────────────────────────────────
+
+internal fun encryptBackup(data: ByteArray, password: String): ByteArray {
+    val rng = SecureRandom()
+    val salt = ByteArray(16).also { rng.nextBytes(it) }
+    val iv = ByteArray(12).also { rng.nextBytes(it) }
+    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+    val keyBytes = factory.generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+    return "MAYA".toByteArray() + salt + iv + cipher.doFinal(data)
+}
+
+internal fun decryptBackup(data: ByteArray, password: String): ByteArray {
+    require(data.size > 32) { "Geçersiz yedek dosyası" }
+    require(String(data.slice(0..3).toByteArray()) == "MAYA") { "Bu dosya Maya yedek dosyası değil" }
+    val salt = data.slice(4..19).toByteArray()
+    val iv = data.slice(20..31).toByteArray()
+    val enc = data.slice(32 until data.size).toByteArray()
+    val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        .generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+    return cipher.doFinal(enc)
+}
+
+internal fun isEncryptedBackup(data: ByteArray): Boolean =
+    data.size >= 4 && String(data.slice(0..3).toByteArray()) == "MAYA"
