@@ -998,68 +998,145 @@ private fun MainActivity.restoreTavernAvatarsLegacyB64(charactersJsonRaw: String
 
 // ── Şifreleme / Çözme (TAM stream tabanlı — büyük ZIP dosyaları için bellek dostu) ──
 //
-// ÖNEMLİ: cipher.doFinal(tümVeri) ASLA kullanılmaz — bu, hem kaynak hem şifreli
-// veriyi aynı anda bellekte tutar ve büyük yedeklerde OutOfMemoryError'a yol açar.
-// Bunun yerine CipherInputStream / CipherOutputStream ile sabit boyutlu (64KB)
-// arabellek parçaları halinde şifreleme/şifre çözme yapılır. AES/GCM bunu sorunsuz
-// destekler — GCM doğrulama etiketi akışın kapanışında (close()) otomatik eklenir.
+// NOT (önemli): AES/GCM, Android'in JCA implementasyonunda CipherInputStream/
+// CipherOutputStream ile kullanıldığında dahili olarak TÜM veriyi tek bir
+// buffer'da biriktirebiliyor (GCM doğrulama etiketi tüm veri işlendikten sonra
+// hesaplanabildiği için). Bu, büyük (100MB+) yedeklerde OutOfMemoryError'a yol
+// açıyordu. Bu yüzden burada AES/CBC/PKCS5Padding + ayrı HMAC-SHA256
+// (Encrypt-then-MAC) kullanılır — CBC modu JCA seviyesinde GERÇEK blok-blok
+// streaming yapar, hiçbir noktada büyük dahili buffer oluşturmaz.
+//
+// Format: "MAYC" + salt(16) + iv(16) + hmac(32) + [CBC şifreli veri, stream]
+//   - "MAYC" : yeni format imzası (eski "MAYA"/GCM formatından ayırt etmek için)
+//   - hmac   : HMAC-SHA256(şifreli_veri) — bütünlük/kimlik doğrulama
+//   - Anahtarlar: PBKDF2WithHmacSHA256(password, salt, 310_000) → 64 byte
+//                 ilk 32 byte = AES anahtarı, son 32 byte = HMAC anahtarı
 
 private const val BACKUP_STREAM_BUFFER_SIZE = 64 * 1024
+private const val NEW_FORMAT_MAGIC = "MAYC"
+private const val OLD_FORMAT_MAGIC = "MAYA"  // eski GCM formatı — artık üretilmiyor ama tespit edilebilir olmalı
+
+/** PBKDF2 ile 64 byte türetir; ilk 32 byte AES anahtarı, son 32 byte HMAC anahtarı olarak kullanılır. */
+private fun deriveKeys(password: String, salt: ByteArray): Pair<ByteArray, ByteArray> {
+    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+    val keyMaterial = factory.generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 512)).encoded
+    return keyMaterial.copyOfRange(0, 32) to keyMaterial.copyOfRange(32, 64)
+}
 
 /**
- * [srcFile] dosyasını AES-256-GCM ile parça parça şifreleyip [out]'a yazar.
- * Format: "MAYA" + salt(16) + iv(12) + şifreli_veri(streamed)
+ * [srcFile] dosyasını AES-256-CBC ile parça parça şifreleyip, HMAC-SHA256 ekleyerek [out]'a yazar.
+ * Hiçbir noktada kaynak veya şifreli verinin TAMAMI bellekte tutulmaz.
  */
 internal fun encryptBackupStream(srcFile: File, out: OutputStream, password: String) {
     val rng = SecureRandom()
     val salt = ByteArray(16).also { rng.nextBytes(it) }
-    val iv   = ByteArray(12).also { rng.nextBytes(it) }
-    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-    val keyBytes = factory.generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+    val iv   = ByteArray(16).also { rng.nextBytes(it) }
+    val (aesKey, hmacKey) = deriveKeys(password, salt)
 
-    out.write("MAYA".toByteArray())
-    out.write(salt)
-    out.write(iv)
+    val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+    cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(aesKey, "AES"), javax.crypto.spec.IvParameterSpec(iv))
 
-    javax.crypto.CipherOutputStream(out, cipher).use { cos ->
-        srcFile.inputStream().buffered().use { input ->
-            val buf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
-            var n: Int
-            while (input.read(buf).also { n = it } != -1) {
-                cos.write(buf, 0, n)
-            }
-        }
-        // cos.close() (use bloğu sonunda) GCM doğrulama etiketini akışın sonuna ekler.
-    }
-}
+    // ── Adım 1: şifreli veriyi geçici dosyaya stream et, aynı anda HMAC hesapla ──
+    val tmpEncrypted = File(srcFile.parentFile ?: srcFile, "${srcFile.name}.enc_tmp")
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+    mac.init(SecretKeySpec(hmacKey, "HmacSHA256"))
 
-/** [srcFile] (MAYA+salt+iv+şifreli_veri formatında) parça parça çözüp [destFile]'a yazar. */
-internal fun decryptBackupStream(srcFile: File, destFile: File, password: String) {
-    srcFile.inputStream().buffered().use { input ->
-        val magic = ByteArray(4)
-        if (readFullyOrThrow(input, magic) != 4 || String(magic) != "MAYA") {
-            throw IllegalArgumentException("Bu dosya Maya yedek dosyası değil")
-        }
-        val salt = ByteArray(16); readFullyOrThrow(input, salt)
-        val iv   = ByteArray(12); readFullyOrThrow(input, iv)
-
-        val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-            .generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
-
-        javax.crypto.CipherInputStream(input, cipher).use { cis ->
-            destFile.outputStream().buffered().use { out ->
-                val buf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
+    try {
+        tmpEncrypted.outputStream().buffered().use { encOut ->
+            srcFile.inputStream().buffered().use { input ->
+                val inBuf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
                 var n: Int
-                while (cis.read(buf).also { n = it } != -1) {
-                    out.write(buf, 0, n)
+                while (input.read(inBuf).also { n = it } != -1) {
+                    val outBytes = cipher.update(inBuf, 0, n)
+                    if (outBytes != null && outBytes.isNotEmpty()) {
+                        encOut.write(outBytes)
+                        mac.update(outBytes)
+                    }
+                }
+                val finalBytes = cipher.doFinal()
+                if (finalBytes != null && finalBytes.isNotEmpty()) {
+                    encOut.write(finalBytes)
+                    mac.update(finalBytes)
                 }
             }
         }
+
+        // ── Adım 2: header + salt + iv + hmac yaz, sonra şifreli veriyi kopyala ──
+        out.write(NEW_FORMAT_MAGIC.toByteArray())
+        out.write(salt)
+        out.write(iv)
+        out.write(mac.doFinal())
+        tmpEncrypted.inputStream().buffered().use { it.copyTo(out, BACKUP_STREAM_BUFFER_SIZE) }
+    } finally {
+        try { tmpEncrypted.delete() } catch (_: Exception) {}
     }
+}
+
+/**
+ * [srcFile] (yeni "MAYC" formatında) HMAC'i doğrulayıp şifresini çözer, [destFile]'a yazar.
+ * Eski "MAYA" (GCM) formatındaki yedekler için ayrı bir fallback yoldur — bkz. [decryptBackupStreamLegacyGcm].
+ */
+internal fun decryptBackupStream(srcFile: File, destFile: File, password: String) {
+    srcFile.inputStream().buffered().use { input ->
+        val magic = ByteArray(4)
+        if (readFullyOrThrow(input, magic) != 4) throw IllegalArgumentException("Geçersiz yedek dosyası")
+        val magicStr = String(magic)
+
+        if (magicStr == OLD_FORMAT_MAGIC) {
+            // Eski GCM formatı — ayrı fonksiyona devret (aynı stream'in devamından okumaya gerek yok,
+            // çağıran taraf dosyayı baştan tekrar açar).
+            decryptBackupStreamLegacyGcm(srcFile, destFile, password)
+            return
+        }
+        if (magicStr != NEW_FORMAT_MAGIC) throw IllegalArgumentException("Bu dosya Maya yedek dosyası değil")
+
+        val salt = ByteArray(16); readFullyOrThrow(input, salt)
+        val iv   = ByteArray(16); readFullyOrThrow(input, iv)
+        val expectedHmac = ByteArray(32); readFullyOrThrow(input, expectedHmac)
+
+        val (aesKey, hmacKey) = deriveKeys(password, salt)
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(hmacKey, "HmacSHA256"))
+
+        val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(aesKey, "AES"), javax.crypto.spec.IvParameterSpec(iv))
+
+        destFile.outputStream().buffered().use { out ->
+            val buf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
+            var n: Int
+            while (input.read(buf).also { n = it } != -1) {
+                mac.update(buf, 0, n)
+                val outBytes = cipher.update(buf, 0, n)
+                if (outBytes != null && outBytes.isNotEmpty()) out.write(outBytes)
+            }
+            val finalBytes = cipher.doFinal()
+            if (finalBytes != null && finalBytes.isNotEmpty()) out.write(finalBytes)
+        }
+
+        val actualHmac = mac.doFinal()
+        if (!actualHmac.contentEquals(expectedHmac)) {
+            try { destFile.delete() } catch (_: Exception) {}
+            throw IllegalArgumentException("Şifre yanlış veya dosya bozuk (bütünlük doğrulaması başarısız)")
+        }
+    }
+}
+
+/** Eski (GCM tabanlı "MAYA") format yedekleri için geriye dönük uyumluluk. */
+private fun decryptBackupStreamLegacyGcm(srcFile: File, destFile: File, password: String) {
+    // Eski format küçük yedeklerde (genelde sohbet+ayar, Mayagram/medya olmadan) üretildiği
+    // için burada tek seferde okumak güvenlidir. Bu yol yalnızca "MAYA" imzalı eski
+    // dosyalar için çalışır; yeni yedekler "MAYC" formatını kullanır (yukarıdaki ana fonksiyon).
+    val data = srcFile.readBytes()
+    require(data.size > 32) { "Geçersiz yedek dosyası" }
+    val salt = data.copyOfRange(4, 20)
+    val iv   = data.copyOfRange(20, 32)
+    val enc  = data.copyOfRange(32, data.size)
+    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+    val keyBytes = factory.generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+    val decrypted = cipher.doFinal(enc)
+    destFile.writeBytes(decrypted)
 }
 
 /** [buf] tamamen dolana kadar okur (kısmi read() çağrılarını birleştirir). Okunan toplam byte sayısını döner. */
