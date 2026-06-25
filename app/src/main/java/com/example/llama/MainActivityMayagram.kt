@@ -394,30 +394,6 @@ private fun MainActivity.buildMayagramCommentPrompt(
     return buildMayagramPrompt(instruction)
 }
 
-/**
- * v6.5: Bir yoruma yanıt (reply) üretmek için prompt.
- * [parentComment] yanıt verilen yorumdur; commenter ona hitaben cevap yazar.
- */
-private fun MainActivity.buildMayagramReplyPrompt(
-    post: MayagramPost,
-    commenter: MayaCharacter,
-    parentComment: MayagramComment
-): String {
-    val parentLabel = if (parentComment.authorIsUser) "Kullanıcı (${parentComment.authorName})" else parentComment.authorName
-    val instruction = buildString {
-        appendLine("Sen ${commenter.name} karakterisin. ${commenter.systemPrompt}")
-        appendLine()
-        appendLine("${post.characterName} şu gönderiyi paylaştı:")
-        appendLine("\"${post.caption}\"")
-        appendLine()
-        appendLine("$parentLabel bu gönderiye şu yorumu yazdı:")
-        appendLine("\"${parentComment.content}\"")
-        appendLine()
-        append("$parentLabel'e karakterine uygun, kısa ve samimi bir yanıt yaz (tek cümle, emoji kullanabilirsin, doğal bir sohbet gibi). Sadece yanıt metnini yaz, başka hiçbir şey ekleme:")
-    }
-    return buildMayagramPrompt(instruction)
-}
-
 // ── Thinking / token temizleme ────────────────────────────────────────────────
 
 /**
