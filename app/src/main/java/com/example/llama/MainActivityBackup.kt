@@ -184,7 +184,7 @@ internal fun MainActivity.handleRestoreFile(uri: Uri) {
 
             val header = ByteArray(4)
             tmpFile.inputStream().use { it.read(header) }
-            val looksEncrypted = header.size == 4 && String(header) == "MAYA"
+            val looksEncrypted = header.size == 4 && (String(header) == "MAYC" || String(header) == "MAYA")
 
             if (looksEncrypted) {
                 withContext(Dispatchers.Main) {
