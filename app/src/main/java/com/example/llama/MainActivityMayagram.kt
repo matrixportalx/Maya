@@ -278,26 +278,15 @@ private suspend fun MainActivity.generateImagePromptFromCaption(captionText: Str
 internal fun MainActivity.generateCharacterComment(
     post: MayagramPost,
     commenter: MayaCharacter,
-    parentCommentId: String? = null,
+    replyToText: String? = null,
+    replyToAuthorName: String? = null,
     onDone: (MayagramComment) -> Unit
 ) {
     if (loadedModelPath == null) return
 
     lifecycleScope.launch {
         try {
-            // v6.5: parentCommentId varsa, o yoruma yanıt veriliyormuş gibi prompt oluştur
-            val parentComment = parentCommentId?.let {
-                withContext(Dispatchers.IO) {
-                    AppDatabase.getInstance(this@generateCharacterComment).mayagramDao().getCommentById(it)
-                }
-            }
-
-            val prompt = if (parentComment != null) {
-                buildMayagramReplyPrompt(post, commenter, parentComment)
-            } else {
-                buildMayagramCommentPrompt(post, commenter)
-            }
-
+            val prompt = buildMayagramCommentPrompt(post, commenter, replyToText, replyToAuthorName)
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
             val tokenFlow = if (impl != null) {
@@ -326,9 +315,7 @@ internal fun MainActivity.generateCharacterComment(
                 authorName      = commenter.name,
                 authorEmoji     = commenter.emoji,
                 authorAvatarUri = commenter.avatarUri,
-                content         = text,
-                parentCommentId = parentCommentId,
-                authorIsUser    = false
+                content         = text
             )
             withContext(Dispatchers.IO) {
                 AppDatabase.getInstance(this@generateCharacterComment)
@@ -363,16 +350,32 @@ private fun MainActivity.buildMayagramPrompt(instruction: String): String {
 
 private fun MainActivity.buildMayagramCommentPrompt(
     post: MayagramPost,
-    commenter: MayaCharacter
+    commenter: MayaCharacter,
+    replyToText: String? = null,
+    replyToAuthorName: String? = null
 ): String {
-    val authorLabel = if (post.authorIsUser) "Kullanıcı (${post.characterName})" else post.characterName
+    val charPrompt = commenter.systemPrompt.ifEmpty {
+        listOf(commenter.description, commenter.personality, commenter.scenario)
+            .filter { it.isNotBlank() }.joinToString(". ")
+    }
+
     val instruction = buildString {
-        appendLine("Sen ${commenter.name} karakterisin. ${commenter.systemPrompt}")
+        appendLine("Sen ${commenter.name} karakterisin.")
+        if (charPrompt.isNotBlank()) {
+            appendLine(charPrompt)
+        }
         appendLine()
-        appendLine("$authorLabel şunu paylaştı:")
+        appendLine("${post.characterName} şu gönderiyi paylaştı:")
         appendLine("\"${post.caption}\"")
         appendLine()
-        append("Bu gönderiye karakterine uygun, kısa ve samimi bir yorum yaz (tek cümle, emoji kullanabilirsin). Sadece yorum metnini yaz, başka hiçbir şey ekleme:")
+        if (replyToText != null) {
+            appendLine("${replyToAuthorName ?: "Biri"} bu gönderiye şu yorumu yaptı:")
+            appendLine("\"$replyToText\"")
+            appendLine()
+            append("Sen ${commenter.name} olarak, SADECE bu yoruma karakterine uygun, kısa ve samimi bir yanıt yaz (tek cümle, emoji kullanabilirsin). Kendi adına yaz, başka bir karaktermiş gibi davranma. Sadece yanıt metnini yaz, başka hiçbir şey ekleme:")
+        } else {
+            append("Sen ${commenter.name} olarak, bu gönderiye karakterine uygun, kısa ve samimi bir yorum yaz (tek cümle, emoji kullanabilirsin). Kendi adına yaz, başka bir karaktermiş gibi davranma. Sadece yorum metnini yaz, başka hiçbir şey ekleme:")
+        }
     }
     return buildMayagramPrompt(instruction)
 }
