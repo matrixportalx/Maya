@@ -451,44 +451,64 @@ class MayagramActivity : AppCompatActivity() {
      * v6.5: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir.
      * Bu, kullanıcının POST'A DOĞRUDAN yorum yazdığı durum için (parentCommentId == null).
      */
-    private fun scheduleAutoReplies(post: MayagramPost, commentText: String) {
-        val main = MainActivity.currentInstance
-        if (main == null) { MainActivity.log("Mayagram", "⚠️ MainActivity bulunamadı!"); return }
+    private fun scheduleAutoReplies(post: MayagramPost, commentText: String, commentAuthorName: String = "Kullanıcı") {
+    // Önce tüm karakterleri yükle
+    val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
+    val allChars = loadCharacters(prefs.getString("characters_json", null))
+    if (allChars.isEmpty()) {
+        MainActivity.log("Mayagram", "⚠️ Hiç karakter yok!")
+        return
+    }
 
-        val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
-        val allChars = loadCharacters(prefs.getString("characters_json", null))
-        if (allChars.isEmpty()) { MainActivity.log("Mayagram", "⚠️ Hiç karakter yok!"); return }
+    // 1. Gönderi sahibini bul
+    val postOwner = allChars.find { it.id == post.characterId }
+    if (postOwner == null) {
+        MainActivity.log("Mayagram", "⚠️ Gönderi sahibi bulunamadı! ID: ${post.characterId}")
+        return
+    }
 
-        // Post sahibi bir karakterse o yanıtlasın; kullanıcı kendi postuna otomatik yanıt almaz ama
-        // burada zaten kullanıcı YORUM yazdığı için post sahibi karakterse cevap vermesi doğal.
-        val postOwner = if (!post.authorIsUser) allChars.find { it.id == post.characterId } else null
-
-        val mentioned = mutableListOf<MayaCharacter>()
-        val words = commentText.split(" ")
-        for (word in words) {
-            if (word.startsWith("@")) {
-                val name = word.removePrefix("@").trim().replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
-                val found = allChars.find { it.name.equals(name, ignoreCase = true) }
-                if (found != null && found.id != postOwner?.id) mentioned.add(found)
-            }
-        }
-
-        val responders = mutableListOf<MayaCharacter>()
-        if (postOwner != null) responders.add(postOwner)
-        responders.addAll(mentioned.distinctBy { it.id })
-
-        if (responders.isEmpty()) return
-        MainActivity.log("Mayagram", "📢 Yanıt verecekler: ${responders.joinToString { it.name }}")
-
-        lifecycleScope.launch {
-            for ((index, character) in responders.withIndex()) {
-                kotlinx.coroutines.delay(1500 + (index * 800L))
-                main.generateCharacterComment(post, character, parentCommentId = null) { comment ->
-                    MainActivity.log("Mayagram", "💬 ${character.name} yanıt verdi: ${comment.content}")
-                }
+    // 2. Yorumdaki @ etiketlerini bul
+    val mentioned = mutableListOf<MayaCharacter>()
+    val words = commentText.split(" ")
+    for (word in words) {
+        if (word.startsWith("@")) {
+            val name = word.removePrefix("@").trim()
+                .replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
+            val found = allChars.find { it.name.equals(name, ignoreCase = true) }
+            if (found != null && found.id != post.characterId) {
+                mentioned.add(found)
+                MainActivity.log("Mayagram", "✅ Etiket bulundu: ${found.name}")
             }
         }
     }
+
+    // 3. Yanıt verecekler listesi (önce gönderi sahibi, sonra etiketlenenler)
+    val responders = mutableListOf(postOwner)
+    responders.addAll(mentioned.distinctBy { it.id })
+
+    MainActivity.log("Mayagram", "📢 Yanıt verecekler: ${responders.joinToString { it.name }}")
+
+    // 4. Sırayla yorum yaptır — her biri YORUMA yanıt verir, post caption'ına değil
+    lifecycleScope.launch {
+        for ((index, character) in responders.withIndex()) {
+            kotlinx.coroutines.delay(1500 + (index * 800L))
+
+            val main = this@MayagramActivity as? MainActivity
+            if (main != null) {
+                main.generateCharacterComment(
+                    post = post,
+                    commenter = character,
+                    replyToText = commentText,
+                    replyToAuthorName = commentAuthorName
+                ) { comment ->
+                    MainActivity.log("Mayagram", "💬 ${character.name} yanıt verdi: ${comment.content}")
+                }
+            } else {
+                MainActivity.log("Mayagram", "❌ MainActivity bulunamadı!")
+            }
+        }
+    }
+}
 
     /**
      * v6.5: Bir yoruma YANIT yazıldığında (parentCommentId dolu) çağrılır.
