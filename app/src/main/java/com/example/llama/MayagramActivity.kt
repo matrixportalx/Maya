@@ -498,8 +498,7 @@ class MayagramActivity : AppCompatActivity() {
                 main.generateCharacterComment(
                     post = post,
                     commenter = character,
-                    replyToText = commentText,
-                    replyToAuthorName = commentAuthorName
+                    parentCommentId = null
                 ) { comment ->
                     MainActivity.log("Mayagram", "💬 ${character.name} yanıt verdi: ${comment.content}")
                 }
