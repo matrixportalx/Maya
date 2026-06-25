@@ -656,7 +656,7 @@ class MayagramActivity : AppCompatActivity() {
                         triggerChainReply(post, currentReplyTarget)
                     } else {
                         // Post'a direkt yorum — eski davranış: post sahibi + @etiketler yanıtlar
-                        scheduleAutoReplies(post, text)
+                        scheduleAutoReplies(post, text, userName)
                     }
                 }
             }
