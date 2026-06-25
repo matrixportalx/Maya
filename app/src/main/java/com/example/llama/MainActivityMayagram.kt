@@ -278,14 +278,26 @@ private suspend fun MainActivity.generateImagePromptFromCaption(captionText: Str
 internal fun MainActivity.generateCharacterComment(
     post: MayagramPost,
     commenter: MayaCharacter,
-    replyToText: String? = null,
-    replyToAuthorName: String? = null,
+    parentCommentId: String? = null,
     onDone: (MayagramComment) -> Unit
 ) {
     if (loadedModelPath == null) return
 
     lifecycleScope.launch {
         try {
+            // parentCommentId doluysa, o yorumu DB'den çek — kime ve neye yanıt verildiğini bilmek için
+            val parentComment: MayagramComment? = if (parentCommentId != null) {
+                withContext(Dispatchers.IO) {
+                    AppDatabase.getInstance(this@generateCharacterComment)
+                        .mayagramDao().getCommentById(parentCommentId)
+                }
+            } else null
+
+            val replyToText = parentComment?.content
+            val replyToAuthorName = parentComment?.let {
+                if (it.authorIsUser) "Kullanıcı (${it.authorName})" else it.authorName
+            }
+
             val prompt = buildMayagramCommentPrompt(post, commenter, replyToText, replyToAuthorName)
             val sb = StringBuilder()
             val impl = engine as? InferenceEngineImpl
@@ -315,7 +327,9 @@ internal fun MainActivity.generateCharacterComment(
                 authorName      = commenter.name,
                 authorEmoji     = commenter.emoji,
                 authorAvatarUri = commenter.avatarUri,
-                content         = text
+                content         = text,
+                parentCommentId = parentCommentId,
+                authorIsUser    = false
             )
             withContext(Dispatchers.IO) {
                 AppDatabase.getInstance(this@generateCharacterComment)
