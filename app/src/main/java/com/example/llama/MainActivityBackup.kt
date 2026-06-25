@@ -1,6 +1,10 @@
 package tr.maya
 
 import android.app.AlertDialog
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -31,6 +35,53 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
+
+// ── Yedekleme/Geri Yükleme bildirimleri ──────────────────────────────────────
+//
+// Büyük yedeklerde (Mayagram dahilse 100MB+) işlem birkaç dakika sürebilir.
+// Kullanıcı bu sırada başka bir uygulamaya geçebilir; bittiğinde haberdar
+// olması için basit bir sistem bildirimi gösterilir (foreground service
+// gerektirmez — işlem süresi Android'in arka plan kısıtlamalarına girecek
+// kadar uzun değildir, ama emin olmak için bildirim yine de faydalıdır).
+
+private const val BACKUP_NOTIF_CHANNEL = "maya_backup_restore"
+private const val BACKUP_NOTIF_ID      = 8001
+
+private fun MainActivity.ensureBackupNotifChannel() {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            BACKUP_NOTIF_CHANNEL,
+            "Yedekleme & Geri Yükleme",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply { description = "Yedekleme veya geri yükleme tamamlandığında bildirir" }
+        nm.createNotificationChannel(channel)
+    }
+}
+
+private fun MainActivity.showBackupResultNotification(title: String, message: String) {
+    try {
+        ensureBackupNotifChannel()
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pi = PendingIntent.getActivity(
+            this, BACKUP_NOTIF_ID, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notif = Notification.Builder(this, BACKUP_NOTIF_CHANNEL)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .build()
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(BACKUP_NOTIF_ID, notif)
+    } catch (e: Exception) {
+        MainActivity.log("Backup", "Bildirim gösterilemedi: ${e.message}")
+    }
+}
 
 // ── Yedekleme ─────────────────────────────────────────────────────────────────
 //
@@ -154,14 +205,18 @@ internal fun MainActivity.performBackupToUri(
                     if (inclSettings) add("ayarlar")
                     if (inclMayagram) add("$mayagramPostCount Mayagram gönderisi")
                 }
-                Toast.makeText(activity, "${parts.joinToString(", ")} yedeklendi${if (encrypt) " (AES-256 şifreli)" else ""}", Toast.LENGTH_LONG).show()
+                val msg = "${parts.joinToString(", ")} yedeklendi${if (encrypt) " (AES-256 şifreli)" else ""}"
+                Toast.makeText(activity, msg, Toast.LENGTH_LONG).show()
+                activity.showBackupResultNotification("✅ Yedekleme tamamlandı", msg)
             }
         } catch (e: Throwable) {
             // NOT: Throwable yakalanır — büyük dosyalarda OutOfMemoryError gibi
             // Error türleri de Exception değildir ve sessizce uygulamayı çökertebilir.
             MainActivity.log("Backup", "Yedekleme hatası: ${e.javaClass.simpleName}: ${e.message}")
             withContext(Dispatchers.Main) {
-                Toast.makeText(activity, "Yedekleme hatası: ${e.javaClass.simpleName}: ${e.message}", Toast.LENGTH_LONG).show()
+                val msg = "Yedekleme hatası: ${e.javaClass.simpleName}: ${e.message}"
+                Toast.makeText(activity, msg, Toast.LENGTH_LONG).show()
+                activity.showBackupResultNotification("❌ Yedekleme başarısız", msg)
             }
         }
     }
@@ -183,7 +238,7 @@ internal fun MainActivity.handleRestoreFile(uri: Uri) {
             } ?: throw Exception("Dosya okunamadı")
 
             val header = ByteArray(4)
-            tmpFile.inputStream().use { it.read(header) }
+            tmpFile.inputStream().use { readFullyOrThrow(it, header) }
             val looksEncrypted = header.size == 4 && (String(header) == "MAYC" || String(header) == "MAYA")
 
             if (looksEncrypted) {
@@ -777,13 +832,19 @@ internal suspend fun MainActivity.importBackupFromZip(
                 if (settingsRestored) add("ayarlar & karakterler geri yüklendi")
                 if (doMayagram && mayagramPostCount > 0) add("$mayagramPostCount Mayagram gönderisi ($mayagramCommentCount yorum)${if (mergeMayagram) " eklendi" else " geri yüklendi"}")
             }
+            val summary = parts.joinToString("\n• ", prefix = "• ")
             AlertDialog.Builder(activity).setTitle("✅ Geri Yükleme Tamamlandı")
-                .setMessage(parts.joinToString("\n• ", prefix = "• "))
+                .setMessage(summary)
                 .setPositiveButton("Tamam", null).show()
+            activity.showBackupResultNotification("✅ Geri yükleme tamamlandı", parts.joinToString(", "))
         }
     } catch (e: Throwable) {
         MainActivity.log("Backup", "Geri yükleme hatası: ${e.javaClass.simpleName}: ${e.message}")
-        withContext(Dispatchers.Main) { Toast.makeText(activity, "Geri yükleme hatası: ${e.message}", Toast.LENGTH_LONG).show() }
+        withContext(Dispatchers.Main) {
+            val msg = "Geri yükleme hatası: ${e.message}"
+            Toast.makeText(activity, msg, Toast.LENGTH_LONG).show()
+            activity.showBackupResultNotification("❌ Geri yükleme başarısız", msg)
+        }
     }
 }
 
