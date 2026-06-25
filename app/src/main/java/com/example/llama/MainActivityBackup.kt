@@ -996,15 +996,19 @@ private fun MainActivity.restoreTavernAvatarsLegacyB64(charactersJsonRaw: String
     }
 }
 
-// ── Şifreleme / Çözme (stream tabanlı — büyük ZIP dosyaları için bellek dostu) ──
+// ── Şifreleme / Çözme (TAM stream tabanlı — büyük ZIP dosyaları için bellek dostu) ──
+//
+// ÖNEMLİ: cipher.doFinal(tümVeri) ASLA kullanılmaz — bu, hem kaynak hem şifreli
+// veriyi aynı anda bellekte tutar ve büyük yedeklerde OutOfMemoryError'a yol açar.
+// Bunun yerine CipherInputStream / CipherOutputStream ile sabit boyutlu (64KB)
+// arabellek parçaları halinde şifreleme/şifre çözme yapılır. AES/GCM bunu sorunsuz
+// destekler — GCM doğrulama etiketi akışın kapanışında (close()) otomatik eklenir.
+
+private const val BACKUP_STREAM_BUFFER_SIZE = 64 * 1024
 
 /**
- * [srcFile] dosyasının tüm baytlarını AES-256-GCM ile şifreleyip [out]'a yazar.
- * Format: "MAYA" + salt(16) + iv(12) + şifreli_veri
- * NOT: GCM modu tek parça şifrelemeyi gerektirir (akış halinde parça parça
- * şifrelemek mesaj bütünlüğü etiketini bozar), bu yüzden kaynak dosya tek seferde
- * okunur. Bu hâlâ tek bir String/JSON yerine ham ZIP byte dizisi olduğu için
- * önceki base64+JSON yaklaşımına göre çok daha az bellek baskısı yaratır.
+ * [srcFile] dosyasını AES-256-GCM ile parça parça şifreleyip [out]'a yazar.
+ * Format: "MAYA" + salt(16) + iv(12) + şifreli_veri(streamed)
  */
 internal fun encryptBackupStream(srcFile: File, out: OutputStream, password: String) {
     val rng = SecureRandom()
@@ -1019,23 +1023,52 @@ internal fun encryptBackupStream(srcFile: File, out: OutputStream, password: Str
     out.write(salt)
     out.write(iv)
 
-    val plainBytes = srcFile.readBytes()
-    val encrypted = cipher.doFinal(plainBytes)
-    out.write(encrypted)
+    javax.crypto.CipherOutputStream(out, cipher).use { cos ->
+        srcFile.inputStream().buffered().use { input ->
+            val buf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
+            var n: Int
+            while (input.read(buf).also { n = it } != -1) {
+                cos.write(buf, 0, n)
+            }
+        }
+        // cos.close() (use bloğu sonunda) GCM doğrulama etiketini akışın sonuna ekler.
+    }
 }
 
-/** [srcFile] (MAYA+salt+iv+şifreli_veri formatında) çözüp [destFile]'a yazar. */
+/** [srcFile] (MAYA+salt+iv+şifreli_veri formatında) parça parça çözüp [destFile]'a yazar. */
 internal fun decryptBackupStream(srcFile: File, destFile: File, password: String) {
-    val data = srcFile.readBytes()
-    require(data.size > 32) { "Geçersiz yedek dosyası" }
-    require(String(data.slice(0..3).toByteArray()) == "MAYA") { "Bu dosya Maya yedek dosyası değil" }
-    val salt = data.slice(4..19).toByteArray()
-    val iv   = data.slice(20..31).toByteArray()
-    val enc  = data.slice(32 until data.size).toByteArray()
-    val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        .generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
-    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-    cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
-    val decrypted = cipher.doFinal(enc)
-    destFile.writeBytes(decrypted)
+    srcFile.inputStream().buffered().use { input ->
+        val magic = ByteArray(4)
+        if (readFullyOrThrow(input, magic) != 4 || String(magic) != "MAYA") {
+            throw IllegalArgumentException("Bu dosya Maya yedek dosyası değil")
+        }
+        val salt = ByteArray(16); readFullyOrThrow(input, salt)
+        val iv   = ByteArray(12); readFullyOrThrow(input, iv)
+
+        val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            .generateSecret(PBEKeySpec(password.toCharArray(), salt, 310_000, 256)).encoded
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyBytes, "AES"), GCMParameterSpec(128, iv))
+
+        javax.crypto.CipherInputStream(input, cipher).use { cis ->
+            destFile.outputStream().buffered().use { out ->
+                val buf = ByteArray(BACKUP_STREAM_BUFFER_SIZE)
+                var n: Int
+                while (cis.read(buf).also { n = it } != -1) {
+                    out.write(buf, 0, n)
+                }
+            }
+        }
+    }
+}
+
+/** [buf] tamamen dolana kadar okur (kısmi read() çağrılarını birleştirir). Okunan toplam byte sayısını döner. */
+private fun readFullyOrThrow(input: java.io.InputStream, buf: ByteArray): Int {
+    var off = 0
+    while (off < buf.size) {
+        val n = input.read(buf, off, buf.size - off)
+        if (n == -1) break
+        off += n
+    }
+    return off
 }
