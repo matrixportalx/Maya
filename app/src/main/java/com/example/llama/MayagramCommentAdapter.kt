@@ -22,6 +22,10 @@ import java.util.Locale
 /**
  * v6.5: [onReply] — kullanıcı bir yorumun "↩ Yanıtla" butonuna bastığında çağrılır.
  * Parametre: yanıtlanacak yorum (parentCommentId olarak kullanılacak).
+ *
+ * Thread/grup görünümü: yorumlar DB'den timestamp sırasıyla gelir ama burada
+ * ağaç sırasına (kök yorum + tüm yanıt zinciri art arda) yeniden diziliyor.
+ * Böylece "X'e verilen yanıtlar alt alta" görünümü elde edilir.
  */
 class MayagramCommentAdapter(
     private val onReply: (MayagramComment) -> Unit = {}
@@ -30,19 +34,50 @@ class MayagramCommentAdapter(
     private val items = mutableListOf<MayagramComment>()
     // commentId -> authorName eşlemesi, "kime yanıt veriyor" etiketini göstermek için
     private val authorNameById = mutableMapOf<String, String>()
+    // commentId -> derinlik (0 = kök yorum, 1+ = yanıt zinciri derinliği)
+    private val depthById = mutableMapOf<String, Int>()
+
+    /** Flat (timestamp sıralı) DB listesini ağaç sırasına çevirir. */
+    private fun toThreadOrder(flat: List<MayagramComment>): List<MayagramComment> {
+        val byParent = flat.groupBy { it.parentCommentId }
+        val roots = (byParent[null] ?: emptyList()).sortedBy { it.timestamp }
+        val result = mutableListOf<MayagramComment>()
+
+        fun appendWithReplies(comment: MayagramComment, depth: Int) {
+            result.add(comment)
+            depthById[comment.id] = depth
+            val replies = (byParent[comment.id] ?: emptyList()).sortedBy { it.timestamp }
+            replies.forEach { appendWithReplies(it, depth + 1) }
+        }
+
+        roots.forEach { appendWithReplies(it, 0) }
+
+        // Güvenlik: parent'ı listede bulunamayan (silinmiş/kayıp) yorumlar varsa en sona ekle
+        val placed = result.map { it.id }.toSet()
+        flat.filter { it.id !in placed }.forEach {
+            result.add(it)
+            depthById[it.id] = 0
+        }
+
+        return result
+    }
 
     fun submitList(list: List<MayagramComment>) {
+        depthById.clear()
+        val ordered = toThreadOrder(list)
         items.clear()
-        items.addAll(list)
+        items.addAll(ordered)
         authorNameById.clear()
-        list.forEach { authorNameById[it.id] = it.authorName }
+        ordered.forEach { authorNameById[it.id] = it.authorName }
         notifyDataSetChanged()
     }
 
     fun addComment(comment: MayagramComment) {
-        items.add(comment)
+        // Yeni yorumu mevcut listeye ekleyip tüm listeyi yeniden ağaç sırasına diz.
+        // Tek bir yorum eklerken sıralama az sayıda yorumda hızlıdır, performans sorunu olmaz.
+        val newFlat = items + comment
         authorNameById[comment.id] = comment.authorName
-        notifyItemInserted(items.size - 1)
+        submitList(newFlat)
     }
 
     override fun getItemCount() = items.size
@@ -62,9 +97,10 @@ class MayagramCommentAdapter(
         holder.tvContent.text = c.content
         holder.tvTime.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(c.timestamp))
 
-        // v6.5: Reply girintisi — parentCommentId varsa içeri kaydır
+        // v6.5: Reply girintisi — derinliğe göre kademeli kaydır (her seviye 20dp)
+        val depth = depthById[c.id] ?: 0
         holder.replyIndentSpace.layoutParams = holder.replyIndentSpace.layoutParams.apply {
-            width = if (c.parentCommentId != null) (28 * dp).toInt() else 0
+            width = (depth * 20 * dp).toInt()
         }
 
         // v6.5: "↩ @kime yanıt veriliyor" etiketi
