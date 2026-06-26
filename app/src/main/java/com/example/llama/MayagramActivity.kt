@@ -666,11 +666,11 @@ private fun triggerOwnerReplyToComment(post: MayagramPost, newComment: MayagramC
                     replyBanner.visibility = View.GONE
 
                     if (currentReplyTarget != null) {
-                        // v6.5: Bir yoruma yanıt yazıldı — zincirleme karakter yanıtını tetikle
+                        // Bir yoruma yanıt yazıldı — o yorumun sahibine zincirleme karakter yanıtını tetikle
                         triggerChainReply(post, currentReplyTarget)
                     } else {
-                        // Post'a direkt yorum — eski davranış: post sahibi + @etiketler yanıtlar
-                        scheduleAutoReplies(post, text, userName)
+                        // Post'a direkt yorum — post sahibi (ve @etiketlenenler) BU YORUMA yanıt verir
+                        triggerOwnerReplyToComment(post, comment)
                     }
                 }
             }
