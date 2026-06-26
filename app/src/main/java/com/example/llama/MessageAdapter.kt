@@ -531,3 +531,16 @@ class MessageAdapter(
         val txtTps: TextView              = view.findViewById(R.id.txt_tps)
     }
 }
+    /** Kullanıcı mesajındaki görsele dokunulduğunda basit tam ekran önizleme gösterir. */
+    private fun showImagePreviewDialog(context: Context, imagePath: String) {
+        val bmp = BitmapFactory.decodeFile(imagePath) ?: return
+        val imageView = android.widget.ImageView(context).apply {
+            setImageBitmap(bmp)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(0xFF000000.toInt())
+        }
+        android.app.AlertDialog.Builder(context)
+            .setView(imageView)
+            .setPositiveButton("Kapat", null)
+            .show()
+}
