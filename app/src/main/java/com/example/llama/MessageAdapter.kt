@@ -355,7 +355,7 @@ class MessageAdapter(
         val dp = context.resources.displayMetrics.density
         val avatarSizePx = (44 * dp).toInt()
 
-        if (holder is UserViewHolder) {
+                if (holder is UserViewHolder) {
             // ── Avatar ────────────────────────────────────────────────────────
             val fallbackUserColor = ContextCompat.getColor(context, R.color.light_avatar_user)
             bindAvatar(
@@ -364,7 +364,7 @@ class MessageAdapter(
                 textView = holder.msgAvatar,
                 avatarUri = userAvatarUri,
                 emoji = userEmoji,
-                fallbackColor = fallbackUserColor,
+                        fallbackColor = fallbackUserColor,
                 sizePx = avatarSizePx
             )
 
@@ -384,14 +384,40 @@ class MessageAdapter(
                 message.content
             holder.msgContent.text = displayText
 
-            holder.itemView.findViewById<Button>(R.id.btn_copy).setOnClickListener {
-                onCopy(message.content)
-            }
-            holder.itemView.findViewById<Button>(R.id.btn_edit).setOnClickListener {
-                onEdit(position, message.content)
-            }
+            // ── v4.8: Kullanıcının gönderdiği görsel ───────────────────────────
+            val imgPath = message.imagePath
+            if (imgPath != null && File(imgPath).exists()) {
+                holder.msgUserImage.visibility = View.VISIBLE
+                val cached = bitmapCache.get(imgPath)
+                if (cached != null) {
+                    holder.msgUserImage.setImageBitmap(cached)        } else {
+            holder.msgUserImage.setImageDrawable(null)
+            Thread {
+                val bmp = BitmapFactory.decodeFile(imgPath)
+                if (bmp != null) {
+                    bitmapCache.put(imgPath, bmp)
+                    (context as? android.app.Activity)?.runOnUiThread {
+                        holder.msgUserImage.setImageBitmap(bmp)
+                    }
+                }
+            }.start()
+        }
+        holder.msgUserImage.setOnClickListener {
+            showImagePreviewDialog(context, imgPath)
+        }
+    } else {
+        holder.msgUserImage.visibility = View.GONE
+        holder.msgUserImage.setImageDrawable(null)
+    }
 
-        } else if (holder is AssistantViewHolder) {
+    holder.itemView.findViewById<Button>(R.id.btn_copy).setOnClickListener {
+        onCopy(message.content)
+    }
+    holder.itemView.findViewById<Button>(R.id.btn_edit).setOnClickListener {
+        onEdit(position, message.content)
+    }
+
+} else if (holder is AssistantViewHolder) {
             val parsed = parseThinking(message.content)
 
             // ── Avatar ────────────────────────────────────────────────────────
