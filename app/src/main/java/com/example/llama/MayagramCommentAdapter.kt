@@ -26,6 +26,12 @@ import java.util.Locale
  * Thread/grup görünümü: yorumlar DB'den timestamp sırasıyla gelir ama burada
  * ağaç sırasına (kök yorum + tüm yanıt zinciri art arda) yeniden diziliyor.
  * Böylece "X'e verilen yanıtlar alt alta" görünümü elde edilir.
+ *
+ * v6.6: Girinti derinliği artık SINIRLI (cap=1). Kök yorum derinlik 0'da durur,
+ * ondan sonraki TÜM zincirleme yanıtlar (derinlik 1, 2, 3...) aynı sabit
+ * girintide gösterilir. Önceki davranışta her yanıt seviyesi +20dp daha
+ * kaydırılıyordu; uzun zincirlerde (5-6+ yanıt) metin alanı neredeyse sıfıra
+ * düşüyor ve harfler alt alta tek sütun halinde görünüyordu.
  */
 class MayagramCommentAdapter(
     private val onReply: (MayagramComment) -> Unit = {}
@@ -34,8 +40,11 @@ class MayagramCommentAdapter(
     private val items = mutableListOf<MayagramComment>()
     // commentId -> authorName eşlemesi, "kime yanıt veriyor" etiketini göstermek için
     private val authorNameById = mutableMapOf<String, String>()
-    // commentId -> derinlik (0 = kök yorum, 1+ = yanıt zinciri derinliği)
+    // commentId -> derinlik (0 = kök yorum, 1+ = yanıt zinciri derinliği — bind sırasında sınırlanır)
     private val depthById = mutableMapOf<String, Int>()
+
+    /** Bir yanıt zincirinde girintinin durdurulacağı maksimum derinlik. 1 = sadece kök (0) ve tek bir sabit yanıt girintisi (1). */
+    private val maxIndentDepth = 1
 
     /** Flat (timestamp sıralı) DB listesini ağaç sırasına çevirir. */
     private fun toThreadOrder(flat: List<MayagramComment>): List<MayagramComment> {
@@ -97,10 +106,13 @@ class MayagramCommentAdapter(
         holder.tvContent.text = c.content
         holder.tvTime.text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(c.timestamp))
 
-        // v6.5: Reply girintisi — derinliğe göre kademeli kaydır (her seviye 20dp)
-        val depth = depthById[c.id] ?: 0
+        // v6.6: Reply girintisi — derinlik [maxIndentDepth] ile SINIRLANIR.
+        // Kök yorum (0) girintisiz; 1. seviye yanıt 20dp girinti alır; 2., 3., 4.
+        // seviye yanıtlar da AYNI 20dp girintide kalır — sürekli sağa kayma engellenir.
+        val rawDepth = depthById[c.id] ?: 0
+        val cappedDepth = rawDepth.coerceAtMost(maxIndentDepth)
         holder.replyIndentSpace.layoutParams = holder.replyIndentSpace.layoutParams.apply {
-            width = (depth * 20 * dp).toInt()
+            width = (cappedDepth * 20 * dp).toInt()
         }
 
         // v6.5: "↩ @kime yanıt veriliyor" etiketi
