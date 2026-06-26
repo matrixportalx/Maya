@@ -488,6 +488,7 @@ class MessageAdapter(
         val msgTimestamp: TextView   = view.findViewById(R.id.msg_timestamp)
         val msgIndex: TextView       = view.findViewById(R.id.msg_index)
         val msgContent: TextView     = view.findViewById(R.id.msg_content)
+        val msgUserImage: android.widget.ImageView = view.findViewById(R.id.msg_user_image)
     }
 
     class AssistantViewHolder(view: View) : RecyclerView.ViewHolder(view) {
