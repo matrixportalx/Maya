@@ -642,8 +642,8 @@ class MayagramActivity : AppCompatActivity() {
                     replyBanner.visibility = View.GONE
 
                     if (currentReplyTarget != null) {
-                        // Bir yoruma yanıt yazıldı — o yorumun sahibine zincirleme karakter yanıtını tetikle
-                        triggerChainReply(post, currentReplyTarget)
+                        // Bir yoruma yanıt yazıldı — o yorumun sahibine, YENİ yoruma bağlı zincirleme yanıt tetikle
+                        triggerChainReply(post, currentReplyTarget, comment)
                     } else {
                         // Post'a direkt yorum — post sahibi (ve @etiketlenenler) BU YORUMA yanıt verir
                         triggerOwnerReplyToComment(post, comment)
