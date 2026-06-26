@@ -81,26 +81,45 @@
 
         </LinearLayout>
 
-        <!-- Mesaj baloncuğu (sağa hizalı) -->
+        <!-- v4.8: Kullanıcının gönderdiği görsel (varsa) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="end">
+            android:gravity="end"
+            android:layout_marginBottom="4dp">
 
-            <TextView
-                android:id="@+id/msg_content"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:maxWidth="260dp"
+            <ImageView
+                android:id="@+id/msg_user_image"
+                android:layout_width="180dp"
+                android:layout_height="180dp"
+                android:scaleType="centerCrop"
                 android:background="@drawable/bg_user_message"
-                android:padding="12dp"
-                android:lineSpacingMultiplier="1.3"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:textIsSelectable="true" />
+                android:visibility="gone"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Gönderilen görüntü" />
 
         </LinearLayout>
 
+<!-- Mesaj baloncuğu (sağa hizalı) -->
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="end">
+
+    <TextView
+        android:id="@+id/msg_content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxWidth="260dp"
+        android:background="@drawable/bg_user_message"
+        android:padding="12dp"
+        android:lineSpacingMultiplier="1.3"
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textIsSelectable="true" />
+
+</LinearLayout>
         <!-- Butonlar (sağa hizalı) -->
         <LinearLayout
             android:layout_width="match_parent"
