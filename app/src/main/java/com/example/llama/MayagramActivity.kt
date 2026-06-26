@@ -499,9 +499,15 @@ class MayagramActivity : AppCompatActivity() {
      * Yanıtlanan yorumu yazan KARAKTER ise (kullanıcı değilse), o karaktere
      * zincirleme bir yanıt ürettirir — sınırsız derinlik, her seferinde bir önceki yazar cevap verir.
      */
-    private fun triggerChainReply(post: MayagramPost, parentComment: MayagramComment) {
+    /**
+ * Bir yoruma YANIT yazıldığında çağrılır. Yanıtlanan yorumu yazan KARAKTER ise
+ * (kullanıcı değilse), o karaktere zincirleme bir yanıt ürettirir.
+ * [newComment] az önce eklenen yorumdur (örn. kullanıcının "Nereye gittin?" sorusu) —
+ * karakterin yanıtı BUNA bağlanır, eski parent yoruma değil.
+ */
+    private fun triggerChainReply(post: MayagramPost, parentComment: MayagramComment, newComment: MayagramComment) {
         if (parentComment.authorIsUser) {
-            // Kullanıcının yorumuna otomatik karakter yanıtı tetiklenmez — kullanıcı ne zaman isterse kendi yazar.
+        // Kullanıcının yorumuna otomatik karakter yanıtı tetiklenmez — kullanıcı ne zaman isterse kendi yazar.
             return
         }
         val main = MainActivity.currentInstance ?: return
@@ -511,7 +517,7 @@ class MayagramActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             kotlinx.coroutines.delay(1000)
-            main.generateCharacterComment(post, commenter, parentCommentId = parentComment.id) { reply ->
+            main.generateCharacterComment(post, commenter, parentCommentId = newComment.id) { reply ->
                 MainActivity.log("Mayagram", "🔁 ${commenter.name} zincirleme yanıt verdi: ${reply.content}")
             }
         }
