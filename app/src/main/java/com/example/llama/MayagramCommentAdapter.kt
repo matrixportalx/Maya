@@ -44,7 +44,7 @@ class MayagramCommentAdapter(
     private val depthById = mutableMapOf<String, Int>()
 
     /** Bir yanıt zincirinde girintinin durdurulacağı maksimum derinlik. 1 = sadece kök (0) ve tek bir sabit yanıt girintisi (1). */
-    private val maxIndentDepth = 1
+    private val maxIndentDepth = 2
 
     /** Flat (timestamp sıralı) DB listesini ağaç sırasına çevirir. */
     private fun toThreadOrder(flat: List<MayagramComment>): List<MayagramComment> {
