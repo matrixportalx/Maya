@@ -451,37 +451,52 @@ class MayagramActivity : AppCompatActivity() {
      * v6.5: Gönderi sahibine ve @ ile etiketlenenlere otomatik yanıt verdirir.
      * Bu, kullanıcının POST'A DOĞRUDAN yorum yazdığı durum için (parentCommentId == null).
      */
-    private fun scheduleAutoReplies(post: MayagramPost, commentText: String, commentAuthorName: String = "Kullanıcı") {
-    // Önce tüm karakterleri yükle
-    val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
-    val allChars = loadCharacters(prefs.getString("characters_json", null))
-    if (allChars.isEmpty()) {
-        MainActivity.log("Mayagram", "⚠️ Hiç karakter yok!")
+    /**
+ * Kullanıcı (veya bir karakter) posta DİREKT yorum yazdığında (parentCommentId == null),
+ * post sahibi karakter o yoruma otomatik yanıt verir. Yanıt parentCommentId = yeni
+ * yorumun id'si ile kaydedilir — böylece UI'da doğru thread oluşur.
+ * @ ile etiketlenen karakterler de aynı şekilde, o yoruma yanıt verir.
+ */
+private fun triggerOwnerReplyToComment(post: MayagramPost, newComment: MayagramComment) {
+    if (!newComment.authorIsUser && newComment.authorId == post.characterId) {
+        // Post sahibi kendi gönderisine kendi yorumuna yanıt vermesin
         return
     }
+    val main = MainActivity.currentInstance ?: return
+    val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
+    val allChars = loadCharacters(prefs.getString("characters_json", null))
+    if (allChars.isEmpty()) return
 
-    // 1. Gönderi sahibini bul
     val postOwner = allChars.find { it.id == post.characterId }
     if (postOwner == null) {
         MainActivity.log("Mayagram", "⚠️ Gönderi sahibi bulunamadı! ID: ${post.characterId}")
         return
     }
 
-    // 2. Yorumdaki @ etiketlerini bul
-    val mentioned = mutableListOf<MayaCharacter>()
-    val words = commentText.split(" ")
-    for (word in words) {
-        if (word.startsWith("@")) {
-            val name = word.removePrefix("@").trim()
-                .replace(Regex("[^a-zA-ZğüşıöçĞÜŞİÖÇ]"), "")
-            val found = allChars.find { it.name.equals(name, ignoreCase = true) }
-            if (found != null && found.id != post.characterId) {
-                mentioned.add(found)
-                MainActivity.log("Mayagram", "✅ Etiket bulundu: ${found.name}")
+    val mentioned = extractMentionedCharacters(newComment.content, allChars)
+        .filter { it.id != post.characterId }
+
+    val responders = (listOf(postOwner) + mentioned)
+        .distinctBy { it.id }
+        .filter { it.id != newComment.authorId }
+
+    if (responders.isEmpty()) return
+
+    MainActivity.log("Mayagram", "📢 '${newComment.content.take(30)}' yorumuna yanıt verecekler: ${responders.joinToString { it.name }}")
+
+    lifecycleScope.launch {
+        for ((index, character) in responders.withIndex()) {
+            kotlinx.coroutines.delay(1200 + (index * 900L))
+            main.generateCharacterComment(
+                post = post,
+                commenter = character,
+                parentCommentId = newComment.id
+            ) { reply ->
+                MainActivity.log("Mayagram", "💬 ${character.name} → ${newComment.authorName}'e yanıt verdi: ${reply.content}")
             }
         }
     }
-
+}
     // 3. Yanıt verecekler listesi (önce gönderi sahibi, sonra etiketlenenler)
     val responders = mutableListOf(postOwner)
     responders.addAll(mentioned.distinctBy { it.id })
