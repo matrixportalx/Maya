@@ -521,6 +521,181 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     parent.addView(card)
 }
 
+// ── v6.8: Mayagram otomatik paylaşım ayar kartı ──────────────────────────────
+
+/**
+ * Mayagram otomatik (zamanlı) paylaşım ayarlarını gösteren bölüm kartını [parent]'a
+ * ekler. Diğer "Dream API" kartı gibi (buildDreamApiSettingsCard), kaydedilecek
+ * değerleri toplayan bir lambda döner — showSettingsDialog()'daki "Kaydet"
+ * butonunda çağrılır.
+ */
+private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout): () -> Unit {
+    val dp     = resources.displayMetrics.density
+    val isDark = MessageAdapter.isDarkTheme(this)
+    val content = makeSectionCard(parent, "📸", "Mayagram Otomatik Paylaşım")
+
+    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    val initialEnabled  = MayagramAutoPostScheduler.isEnabled(this)
+    val initialInterval = MayagramAutoPostScheduler.getIntervalHours(this)
+
+    // ── Aç/Kapa ───────────────────────────────────────────────────────────────
+    val enableRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+    val enableLabel = TextView(this).apply {
+        text = "Otomatik paylaşım etkin"; textSize = 13f
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    @Suppress("DEPRECATION") val enableSwitch = Switch(this).apply { isChecked = initialEnabled }
+    enableRow.addView(enableLabel); enableRow.addView(enableSwitch)
+    content.addView(enableRow)
+    content.addView(hintText(
+        "Açıksa, belirlenen aralıkta \"🔁 Otomatik Mayagram paylaşımına dahil et\" işaretli " +
+        "karakterlerden rastgele biri kendiliğinden bir gönderi paylaşır."
+    ))
+
+    // ── Aralık ────────────────────────────────────────────────────────────────
+    content.addView(subLabel("Paylaşım Aralığı: $initialInterval saat"))
+    val intervalLabel = content.getChildAt(content.childCount - 1) as TextView
+    val intervalBar = SeekBar(this).apply {
+        max = MayagramAutoPostScheduler.MAX_INTERVAL_HOURS - MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
+        progress = initialInterval - MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
+        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                val hours = p + MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
+                intervalLabel.text = "Paylaşım Aralığı: $hours saat"
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) {}
+        })
+    }
+    content.addView(intervalBar)
+    content.addView(hintText("Her $initialInterval saatte bir, rastgele seçilen bir karakter otomatik gönderi paylaşır."))
+
+    // ── Dahil olan karakterler (bilgilendirme — salt okunur liste) ───────────
+    content.addView(subLabel("Dahil Olan Karakterler"))
+    val includedNames = characters.filter { it.autoPostEnabled }.map { "${it.emoji} ${it.name}" }
+    content.addView(TextView(this).apply {
+        text = if (includedNames.isEmpty())
+            "Henüz hiçbir karakter dahil edilmedi."
+        else includedNames.joinToString(", ")
+        textSize = 12f
+        setTextColor(if (isDark) 0xFFB0C8FF.toInt() else 0xFF2244AA.toInt())
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    })
+    content.addView(hintText("Karakter listesinden bir karaktere uzun basıp \"✏️ Düzenle\" ile \"Otomatik paylaşıma dahil et\" anahtarını açabilirsiniz."))
+
+    // ── Mayagram Modeli seçici (Rapor Modeli ile aynı desen) ─────────────────
+    content.addView(subLabel("Mayagram Modeli"))
+    var autopostModelEntry = prefs.getString(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_ENTRY, null)
+
+    fun autopostModelDisplayName(): String {
+        val entry = autopostModelEntry ?: return "Ayarlanmamış (son yüklü model kullanılır)"
+        return MainActivity.entryDisplayName(entry)
+    }
+
+    val modelRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+    }
+    val modelNameLabel = TextView(this).apply {
+        text = autopostModelDisplayName(); textSize = 12f
+        setTextColor(if (isDark) 0xFFB0C8FF.toInt() else 0xFF2244AA.toInt())
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+    }
+    val modelSelectBtn = android.widget.Button(this).apply {
+        text = "Seç"; textSize = 12f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF1A3A5C.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
+    }
+    val modelClearBtn = android.widget.Button(this).apply {
+        text = "✕"; textSize = 12f
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF3A1A1A.toInt() else 0xFFFFDDDD.toInt()) }
+        setTextColor(if (isDark) 0xFFFF8888.toInt() else 0xFFAA2222.toInt())
+    }
+    modelRow.addView(modelNameLabel); modelRow.addView(modelSelectBtn); modelRow.addView(modelClearBtn)
+    content.addView(modelRow)
+
+    modelSelectBtn.setOnClickListener {
+        val savedModels = prefs.getStringSet("saved_models", mutableSetOf())!!.toMutableList()
+        val modelsDir = getExternalFilesDir("models") ?: filesDir
+        val cachedModels = savedModels.filter { entry ->
+            if (MainActivity.isUriEntry(entry)) {
+                val name = MainActivity.entryDisplayName(entry)
+                java.io.File(modelsDir, "model_$name").exists()
+            } else {
+                java.io.File(entry).exists()
+            }
+        }
+        if (cachedModels.isEmpty()) {
+            Toast.makeText(this, "Önbellekte model yok. Önce bir modeli normal şekilde yükleyin.", Toast.LENGTH_LONG).show()
+            return@setOnClickListener
+        }
+        val names = cachedModels.map { entry ->
+            val name = MainActivity.entryDisplayName(entry)
+            if (entry == autopostModelEntry) "✓ $name" else name
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(this).setTitle("Mayagram Modeli Seç")
+            .setItems(names) { _, which ->
+                autopostModelEntry = cachedModels[which]
+                modelNameLabel.text = autopostModelDisplayName()
+            }.setNegativeButton("İptal", null).show()
+    }
+    modelClearBtn.setOnClickListener {
+        autopostModelEntry = null; modelNameLabel.text = autopostModelDisplayName()
+    }
+    content.addView(hintText("Sadece önbellekte hazır modeller listelenir. Ayarlanmazsa son yüklenen model kullanılır. Küçük/hızlı bir model önerilir."))
+
+    // ── Şablon ────────────────────────────────────────────────────────────────
+    content.addView(subLabel("Şablon"))
+    val templateNames = DailyReportWorker.TEMPLATE_NAMES
+    val templateDisplayNames = arrayOf("Model varsayılanı (önerilen)") + templateNames
+    val savedTemplate = prefs.getInt(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_TEMPLATE, -1)
+    var currentTemplateSelection = if (savedTemplate < 0) 0 else savedTemplate + 1
+    val templateGroup = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+    val templateRadios = templateDisplayNames.mapIndexed { i, name ->
+        RadioButton(this).apply {
+            text = name; id = android.view.View.generateViewId(); isChecked = (i == currentTemplateSelection)
+            setOnCheckedChangeListener { _, checked -> if (checked) currentTemplateSelection = i }
+        }
+    }
+    templateRadios.forEach { templateGroup.addView(it) }
+    content.addView(templateGroup)
+
+    val noThinkRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt() }
+    }
+    val noThinkLabel = TextView(this).apply {
+        text = "Düşünmeyi kapat (Qwen3 / Gemma 4)"; textSize = 13f
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    @Suppress("DEPRECATION") val noThinkSwitch = Switch(this).apply {
+        isChecked = prefs.getBoolean(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_NO_THINK, false)
+    }
+    noThinkRow.addView(noThinkLabel); noThinkRow.addView(noThinkSwitch)
+    content.addView(noThinkRow)
+    content.addView(hintText("Token tasarrufu sağlar. Diğer modelleri etkilemez."))
+
+    // Kaydet lambda'sı
+    return {
+        val intervalHours = intervalBar.progress + MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
+        MayagramAutoPostScheduler.setEnabled(this, enableSwitch.isChecked, intervalHours)
+
+        val templateToSave = if (currentTemplateSelection == 0) -1 else currentTemplateSelection - 1
+        getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit().apply {
+            if (autopostModelEntry != null) putString(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_ENTRY, autopostModelEntry)
+            else remove(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_ENTRY)
+            putInt(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_TEMPLATE, templateToSave)
+            putBoolean(MayagramAutoPostWorker.KEY_AUTOPOST_MODEL_NO_THINK, noThinkSwitch.isChecked)
+        }.apply()
+    }
+}
+
 // ── Ayarlar diyaloğu ──────────────────────────────────────────────────────────
 
 internal fun MainActivity.showSettingsDialog() {
@@ -1189,7 +1364,12 @@ internal fun MainActivity.showSettingsDialog() {
     secProfiles.addView(hintText("Her profil kendi saatinde çalışır. https:// ile başlayan konular RSS olarak çekilir."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 10: OTOMATİK GÜNCELLEME
+    // BÖLÜM 10: MAYAGRAM OTOMATİK PAYLAŞIM  (v6.8)
+    // ═══════════════════════════════════════════════════════════════════════
+    val mayagramAutoPostSaveCallback = buildMayagramAutoPostSettingsCard(layout)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BÖLÜM 11: OTOMATİK GÜNCELLEME
     // ═══════════════════════════════════════════════════════════════════════
     val secUpdate = makeSectionCard(layout, "🆕", "Otomatik Güncelleme Kontrolü")
 
@@ -1234,7 +1414,7 @@ internal fun MainActivity.showSettingsDialog() {
     secUpdate.addView(hintText("Güncelleme kontrolü ağ bağlantısı gerektirir. Yalnızca GitHub Releases API'sine bağlanır."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 11: UYGULAMA TEMASI
+    // BÖLÜM 12: UYGULAMA TEMASI
     // ═══════════════════════════════════════════════════════════════════════
     val secTheme = makeSectionCard(layout, "🌓", "Uygulama Teması")
 
@@ -1247,7 +1427,7 @@ internal fun MainActivity.showSettingsDialog() {
     secTheme.addView(hintText("Değişiklik kaydedilince hemen uygulanır."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 12: ÖNBELLEK YÖNETİMİ
+    // BÖLÜM 13: ÖNBELLEK YÖNETİMİ
     // ═══════════════════════════════════════════════════════════════════════
     val secCache = makeSectionCard(layout, "🗂️", "Önbellek Yönetimi")
 
@@ -1266,12 +1446,12 @@ internal fun MainActivity.showSettingsDialog() {
     secCache.addView(hintText("Listeden kaldırılan modeller önbellekten de silinir."))
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 13: DREAM API  (v6.1)
+    // BÖLÜM 14: DREAM API  (v6.1)
     // ═══════════════════════════════════════════════════════════════════════
     val dreamSaveCallback = buildDreamApiSettingsCard(layout)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BÖLÜM 14: HAKKINDA
+    // BÖLÜM 15: HAKKINDA
     // ═══════════════════════════════════════════════════════════════════════
     addAboutSection(layout)
 
@@ -1356,6 +1536,9 @@ internal fun MainActivity.showSettingsDialog() {
             putBoolean(DailyReportWorker.KEY_REPORT_MODEL_NO_THINK, reportModelNoThink)
             putInt("report_context_size", reportCtxAligned)
         }.apply()
+
+        // ── v6.8: Mayagram otomatik paylaşım ayarlarını kaydet ────────────────
+        mayagramAutoPostSaveCallback()
 
         // ── Otomatik güncelleme ayarlarını kaydet ─────────────────────────────
         getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit()
