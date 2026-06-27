@@ -46,6 +46,7 @@ import java.io.FileOutputStream
 // v6.3 - Tavern karakter kartı içe/dışa aktarma (.png)
 // v6.6 - AI ile karakter avatarı oluşturma (Dream API + LLM prompt üretimi)
 // v6.7 - Avatar tam ekran önizleme/galeriye kaydetme, sahipsiz AI avatar temizliği
+// v6.8 - Mayagram otomatik (zamanlı) karakter paylaşımı: AlarmManager + WorkManager
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -58,7 +59,8 @@ data class MayaCharacter(
     val scenario: String = "",       // v6.3: Tavern "scenario" alanı — kullanıcıyla ilişki/bağlam
     val firstMessage: String = "",   // v6.3: Tavern "first_mes" alanı — henüz otomatik kullanılmıyor
     val description: String = "",    // v6.4: Tavern "description" alanı — bio/görünüm
-    val personality: String = ""     // v6.4: Tavern "personality" alanı — kişilik özeti
+    val personality: String = "",    // v6.4: Tavern "personality" alanı — kişilik özeti
+    val autoPostEnabled: Boolean = false  // v6.8: Otomatik Mayagram paylaşımı bu karakter için açık mı
 )
 
 // ── Özel şablon veri sınıfı ──────────────────────────────────────────────────
@@ -445,6 +447,9 @@ class MainActivity : AppCompatActivity() {
         // ── v5.9: Sessiz güncelleme kontrolü ─────────────────────────────────
         checkForUpdateSilently()
         updateActiveModelSubtitle()
+
+        // ── v6.8: Mayagram otomatik paylaşım alarmını yeniden kur (etkinse) ──
+        MayagramAutoPostScheduler.rescheduleIfEnabled(this)
     }
 
     override fun onResume() {
