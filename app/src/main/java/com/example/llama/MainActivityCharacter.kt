@@ -240,7 +240,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(aiStatusLabel)
 
     layout.addView(label("Emoji (Avatar yoksa gösterilir)"))
-    val emojiField = field("🤖", existing?.emoji ?: "🤖")
+    val emojiField = field("🃏", existing?.emoji ?: "🃏")
     layout.addView(emojiField)
 
     layout.addView(label("Karakter adı ({{char}})"))
