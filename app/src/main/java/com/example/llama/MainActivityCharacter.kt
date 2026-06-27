@@ -240,7 +240,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(aiStatusLabel)
 
     layout.addView(label("Emoji (Avatar yoksa gösterilir)"))
-    val emojiField = field("🃏", existing?.emoji ?: "🃏")
+    val emojiField = field("🤖", existing?.emoji ?: "🤖")
     layout.addView(emojiField)
 
     layout.addView(label("Karakter adı ({{char}})"))
@@ -266,6 +266,33 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(label("İlk mesaj (isteğe bağlı)"))
     val firstMessageField = field("Karakterin sohbet başında söyleyeceği ilk söz...", existing?.firstMessage ?: "", multiLine = true)
     layout.addView(firstMessageField)
+
+    // ── v6.8: Otomatik Mayagram paylaşımı switch'i ───────────────────────────
+    val autoPostRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (12*dp).toInt() }
+    }
+    val autoPostLabel = TextView(this).apply {
+        text = "🔁 Otomatik Mayagram paylaşımına dahil et"
+        textSize = 13f
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+    }
+    @Suppress("DEPRECATION")
+    val autoPostSwitch = android.widget.Switch(this).apply {
+        isChecked = existing?.autoPostEnabled ?: false
+    }
+    autoPostRow.addView(autoPostLabel); autoPostRow.addView(autoPostSwitch)
+    layout.addView(autoPostRow)
+    layout.addView(TextView(this).apply {
+        text = "Açıksa, Ayarlar'da belirlenen aralıkta bu karakter rastgele otomatik gönderi paylaşabilir."
+        textSize = 11f; alpha = 0.55f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (4*dp).toInt() }
+    })
 
     // ── v6.6: AI avatar oluşturma butonu davranışı ───────────────────────────
     // NOT: Bu listener tüm alanlar (description/personality/emoji vb.) layout'a
@@ -354,7 +381,8 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
                 scenario = scenario,
                 firstMessage = firstMsg,
                 description = description,
-                personality = personality
+                personality = personality,
+                autoPostEnabled = autoPostSwitch.isChecked
             )
             if (isNew) {
                 characters.add(char)
@@ -820,7 +848,8 @@ internal fun MainActivity.loadCharactersFromPrefs(): List<MayaCharacter> {
                 scenario = obj.optString("scenario", ""),
                 firstMessage = obj.optString("first_message", ""),
                 description = description,
-                personality = obj.optString("personality", "")
+                personality = obj.optString("personality", ""),
+                autoPostEnabled = obj.optBoolean("auto_post_enabled", false)
             )
         }
     } catch (e: Exception) { emptyList() }
@@ -838,6 +867,7 @@ internal fun MainActivity.saveCharactersToPrefs(list: List<MayaCharacter>) {
             put("first_message", char.firstMessage)
             put("description", char.description)
             put("personality", char.personality)
+            put("auto_post_enabled", char.autoPostEnabled)
         })
     }
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
