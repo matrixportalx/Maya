@@ -142,6 +142,13 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     }
     loadAvatarPreview(currentAvatarUri)
 
+    // ── v6.6: Avatar önizlemesine dokununca tam ekran göster ─────────────────
+    // tempAvatarUri henüz tanımlanmadığı için (aşağıda) buradaki listener bir
+    // lambda referansı üzerinden en güncel değeri okur — Kotlin closure'ı
+    // değişkenin kendisini değil son değerini yakalar, bu yüzden sorun olmaz.
+    avatarPreview.isClickable = true
+    avatarPreview.isFocusable = true
+
     val avatarBtnCol = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -193,6 +200,16 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
 
     // Geçici seçim diyalog için callback
     var tempAvatarUri: String? = currentAvatarUri
+
+    // ── v6.6: Avatar önizlemesine dokununca güncel avatarı tam ekran göster ──
+    avatarPreview.setOnClickListener {
+        val uriToShow = tempAvatarUri
+        if (uriToShow == null) {
+            Toast.makeText(this, "Henüz bir avatar seçilmedi", Toast.LENGTH_SHORT).show()
+        } else {
+            showAvatarFullscreen(uriToShow)
+        }
+    }
 
     selectAvatarBtn.setOnClickListener {
         // Doğrudan sistem galeri intent'i aç (diyalog açık olduğu için launcher yerine)
@@ -373,6 +390,148 @@ internal fun MainActivity.confirmDeleteCharacter(char: MayaCharacter) {
             Toast.makeText(this, "\"${char.name}\" silindi", Toast.LENGTH_SHORT).show()
         }
         .setNegativeButton("İptal", null).show()
+}
+
+// ── v6.7: Avatar tam ekran önizleme + galeriye kaydetme ──────────────────────
+
+/**
+ * Karakter düzenleme diyaloğundaki yuvarlak avatar önizlemesine dokununca çağrılır.
+ * [avatarUriStr] şu formatlardan biri olabilir:
+ *   "drawable:maya_default_avatar" → gömülü Maya fotoğrafı
+ *   "content://..."                → galeriden seçilmiş fotoğraf
+ *   "file:/data/.../xyz.png"       → tavern kartı veya AI üretimli avatar
+ *
+ * Mayagram'daki ZoomableImageView + dialog_fullscreen_image.xml yeniden kullanılır,
+ * ancak Paylaş butonu gizlenir (avatar paylaşmak anlamsız) — sadece Kapat ve
+ * Galeriye Kaydet kalır.
+ */
+internal fun MainActivity.showAvatarFullscreen(avatarUriStr: String) {
+    val bmp: Bitmap? = try {
+        when {
+            avatarUriStr == MainActivity.DEFAULT_AVATAR_MARKER ->
+                BitmapFactory.decodeResource(resources, R.drawable.maya_default_avatar)
+            avatarUriStr.startsWith("file:") ->
+                BitmapFactory.decodeFile(avatarUriStr.removePrefix("file:"))
+            else ->
+                contentResolver.openInputStream(Uri.parse(avatarUriStr))?.use { BitmapFactory.decodeStream(it) }
+        }
+    } catch (e: Exception) { null }
+
+    if (bmp == null) {
+        Toast.makeText(this, "Görüntü yüklenemedi", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val view = layoutInflater.inflate(R.layout.dialog_fullscreen_image, null)
+    val imageView = view.findViewById<ZoomableImageView>(R.id.fs_image_view)
+    val btnShare = view.findViewById<android.widget.ImageButton>(R.id.btn_fs_share)
+    val btnSave  = view.findViewById<android.widget.ImageButton>(R.id.btn_fs_save)
+    val btnClose = view.findViewById<android.widget.ImageButton>(R.id.btn_fs_close)
+
+    imageView.setImageBitmap(bmp)
+    // Avatar paylaşmak anlamsız — bu buton karakter avatar önizlemesinde gizlenir.
+    btnShare.visibility = android.view.View.GONE
+
+    val dialog = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+    dialog.setContentView(view)
+    dialog.window?.setLayout(
+        android.view.WindowManager.LayoutParams.MATCH_PARENT,
+        android.view.WindowManager.LayoutParams.MATCH_PARENT
+    )
+
+    btnSave.setOnClickListener { saveBitmapToGallery(bmp, "maya_avatar") }
+    btnClose.setOnClickListener { dialog.dismiss() }
+
+    dialog.show()
+}
+
+/**
+ * Verilen Bitmap'i doğrudan galeriye PNG olarak kaydeder.
+ * [fileNamePrefix] örn. "maya_avatar" → "maya_avatar_<timestamp>.png"
+ * RELATIVE_PATH "Pictures/Maya" — Mayagram görüntüleriyle aynı klasörü kullanmaz,
+ * çünkü bunlar gönderi değil, kullanıcının kendi karakter avatarlarıdır.
+ */
+internal fun MainActivity.saveBitmapToGallery(bitmap: Bitmap, fileNamePrefix: String) {
+    lifecycleScope.launch(Dispatchers.IO) {
+        try {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                    "${fileNamePrefix}_${System.currentTimeMillis()}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Maya")
+            }
+            val uri = contentResolver.insert(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+            )
+            if (uri != null) {
+                contentResolver.openOutputStream(uri)?.use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveBitmapToGallery,
+                        "✅ Galeriye kaydedildi (Pictures/Maya)", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@saveBitmapToGallery, "Kaydetme başarısız", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@saveBitmapToGallery, "Hata: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+}
+
+// ── v6.7: Kullanılmayan AI avatar dosyalarını temizle ─────────────────────────
+
+/**
+ * ai_avatars/ dizinindeki dosyalar arasında, characters_json içinde HİÇBİR
+ * karakterin avatar_uri'si olarak referans verilmeyenleri siler.
+ *
+ * Bu, kullanıcının "✨ AI ile Oluştur" ile birden fazla deneme yapıp beğenmediği
+ * sonuçları "İptal" ile kapattığı durumlarda diskte biriken sahipsiz dosyaları
+ * temizler. Uygulama açılışında sessizce çalışır (cleanupMissingModels gibi) —
+ * kullanıcıya herhangi bir onay sorusu sormaz, sadece gerçekten kullanılmayan
+ * dosyaları siler.
+ *
+ * NOT: Şu an düzenlenmekte olan (henüz "Kaydet"e basılmamış) bir diyalogdaki
+ * geçici AI avatar, bu fonksiyon çağrıldığında diyalog kapalıysa (örn. sadece
+ * uygulama başlangıcında çalıştığı için) risk oluşturmaz — diyalog açıkken bu
+ * fonksiyon tetiklenmez.
+ */
+internal fun MainActivity.cleanupUnusedAiAvatars() {
+    try {
+        val dir = getAiAvatarsDir()
+        val files = dir.listFiles() ?: return
+        if (files.isEmpty()) return
+
+        val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+        val charactersJson = prefs.getString("characters_json", null) ?: "[]"
+        val usedPaths = mutableSetOf<String>()
+        try {
+            val arr = JSONArray(charactersJson)
+            for (i in 0 until arr.length()) {
+                val avatarUri = arr.getJSONObject(i).optString("avatar_uri", "")
+                if (avatarUri.startsWith("file:")) {
+                    usedPaths.add(avatarUri.removePrefix("file:"))
+                }
+            }
+        } catch (_: Exception) { /* JSON bozuksa hiçbir şey silme — güvenli taraf */ return }
+
+        var deletedCount = 0
+        files.forEach { file ->
+            if (file.absolutePath !in usedPaths) {
+                if (file.delete()) deletedCount++
+            }
+        }
+        if (deletedCount > 0) {
+            MainActivity.log("Maya", "cleanupUnusedAiAvatars: $deletedCount sahipsiz AI avatar silindi")
+        }
+    } catch (e: Exception) {
+        MainActivity.log("Maya", "cleanupUnusedAiAvatars hatası: ${e.message}")
+    }
 }
 
 // ── v6.6: AI ile karakter avatarı üretimi ─────────────────────────────────────
