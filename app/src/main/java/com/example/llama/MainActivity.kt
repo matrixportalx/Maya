@@ -44,6 +44,8 @@ import java.io.FileOutputStream
 // v6.1 - Dream API entegrasyonu: LocalDream SSE görüntü üretimi
 // v6.2 - Mayagram: Maya karakterlerinin sosyal medya akışı
 // v6.3 - Tavern karakter kartı içe/dışa aktarma (.png)
+// v6.6 - AI ile karakter avatarı oluşturma (Dream API + LLM prompt üretimi)
+// v6.7 - Avatar tam ekran önizleme/galeriye kaydetme, sahipsiz AI avatar temizliği
 
 // ── Karakter veri sınıfı ──────────────────────────────────────────────────────
 data class MayaCharacter(
@@ -407,6 +409,7 @@ class MainActivity : AppCompatActivity() {
         loadDreamSettings()           // v6.1: Dream API ayarları
         migrateModelsFromCacheToFilesDir()
         cleanupMissingModels()
+        cleanupUnusedAiAvatars()      // v6.7: sahipsiz AI üretimi avatarları sessizce temizle
         bindViews()
         setupToolbar()
         setupDrawer()
