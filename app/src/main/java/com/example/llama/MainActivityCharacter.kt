@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.lifecycle.lifecycleScope
+import com.arm.aichat.internal.InferenceEngineImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -123,7 +124,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
         }
         if (uriStr != null) {
             try {
-                // İçe aktarılan tavern avatarları (cacheDir dosya yolu) "file:" işaretçisiyle başlar
+                // İçe aktarılan tavern avatarları VEYA AI ile üretilen avatarlar (cacheDir/filesDir dosya yolu) "file:" işaretçisiyle başlar
                 val bmp = if (uriStr.startsWith("file:")) {
                     val path = uriStr.removePrefix("file:")
                     BitmapFactory.decodeFile(path)?.let { raw -> roundBitmap(raw, (72 * dp).toInt()) }
@@ -149,13 +150,26 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     val selectAvatarBtn = android.widget.Button(this).apply {
         text = "📷 Fotoğraf Seç"
         isAllCaps = false
+        textSize = 12f
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         )
     }
+
+    // ── v6.6: AI ile avatar oluştur butonu ───────────────────────────────────
+    val aiAvatarBtn = android.widget.Button(this).apply {
+        text = "✨ AI ile Oluştur"
+        isAllCaps = false
+        textSize = 12f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = (4*dp).toInt() }
+    }
+
     val removeAvatarBtn = android.widget.Button(this).apply {
         text = "✕ Kaldır"
         isAllCaps = false
+        textSize = 12f
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = (4*dp).toInt() }
@@ -163,9 +177,19 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     }
 
     avatarBtnCol.addView(selectAvatarBtn)
+    avatarBtnCol.addView(aiAvatarBtn)
     avatarBtnCol.addView(removeAvatarBtn)
     avatarRow.addView(avatarPreview)
     avatarRow.addView(avatarBtnCol)
+
+    // AI üretim durum etiketi (buton altında, ihtiyaç olunca görünür)
+    val aiStatusLabel = TextView(this).apply {
+        textSize = 11f; alpha = 0.7f
+        visibility = android.view.View.GONE
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = (4*dp).toInt() }
+    }
 
     // Geçici seçim diyalog için callback
     var tempAvatarUri: String? = currentAvatarUri
@@ -196,6 +220,7 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
 
     layout.addView(label("Avatar Fotoğrafı"))
     layout.addView(avatarRow)
+    layout.addView(aiStatusLabel)
 
     layout.addView(label("Emoji (Avatar yoksa gösterilir)"))
     val emojiField = field("🤖", existing?.emoji ?: "🤖")
@@ -224,6 +249,71 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(label("İlk mesaj (isteğe bağlı)"))
     val firstMessageField = field("Karakterin sohbet başında söyleyeceği ilk söz...", existing?.firstMessage ?: "", multiLine = true)
     layout.addView(firstMessageField)
+
+    // ── v6.6: AI avatar oluşturma butonu davranışı ───────────────────────────
+    // NOT: Bu listener tüm alanlar (description/personality/emoji vb.) layout'a
+    // eklendikten SONRA tanımlanıyor — çünkü tıklandığında o anki metin kutusu
+    // içeriklerini (henüz kaydedilmemiş haliyle) okuyup prompt'a katmamız gerekiyor.
+    aiAvatarBtn.setOnClickListener {
+        if (loadedModelPath == null) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("⚠️ Model Gerekli")
+                .setMessage("AI ile avatar oluşturmak için önce bir model yüklemeniz gerekir.")
+                .setPositiveButton("Tamam", null).show()
+            return@setOnClickListener
+        }
+        if (!dreamApiEnabled) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("⚠️ Dream API Kapalı")
+                .setMessage("AI ile avatar oluşturmak için Dream API'yi Ayarlar'dan etkinleştirin ve Local Dream uygulamasının çalıştığından emin olun.")
+                .setPositiveButton("Tamam", null).show()
+            return@setOnClickListener
+        }
+
+        val tempCharForPrompt = MayaCharacter(
+            id = existing?.id ?: "__new__",
+            name = nameField.text.toString().trim().ifEmpty { "Maya" },
+            userName = userNameField.text.toString().trim().ifEmpty { "Kullanıcı" },
+            emoji = emojiField.text.toString().trim().ifEmpty { "🤖" },
+            systemPrompt = existing?.systemPrompt ?: "",
+            description = descriptionField.text.toString().trim(),
+            personality = personalityField.text.toString().trim(),
+            scenario = scenarioField.text.toString().trim()
+        )
+
+        if (tempCharForPrompt.description.isBlank() && tempCharForPrompt.personality.isBlank()) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("⚠️ Açıklama Gerekli")
+                .setMessage("AI'nın bir görsel tarif edebilmesi için önce \"Açıklama / Bio\" veya \"Kişilik\" alanını doldurun.")
+                .setPositiveButton("Tamam", null).show()
+            return@setOnClickListener
+        }
+
+        aiAvatarBtn.isEnabled = false
+        selectAvatarBtn.isEnabled = false
+        aiStatusLabel.visibility = android.view.View.VISIBLE
+        aiStatusLabel.text = "🧠 Görsel tarif oluşturuluyor…"
+
+        generateAvatarForCharacter(
+            character = tempCharForPrompt,
+            onProgress = { status ->
+                aiStatusLabel.text = status
+            },
+            onDone = { avatarFile ->
+                tempAvatarUri = "file:${avatarFile.absolutePath}"
+                loadAvatarPreview(tempAvatarUri)
+                removeAvatarBtn.visibility = android.view.View.VISIBLE
+                aiStatusLabel.text = "✅ Avatar oluşturuldu"
+                aiAvatarBtn.isEnabled = true
+                selectAvatarBtn.isEnabled = true
+            },
+            onError = { msg ->
+                aiStatusLabel.text = "❌ $msg"
+                aiAvatarBtn.isEnabled = true
+                selectAvatarBtn.isEnabled = true
+            }
+        )
+    }
 
     android.app.AlertDialog.Builder(this)
         .setTitle(if (isNew) "➕ Yeni Karakter" else "✏️ Karakteri Düzenle")
@@ -283,6 +373,182 @@ internal fun MainActivity.confirmDeleteCharacter(char: MayaCharacter) {
             Toast.makeText(this, "\"${char.name}\" silindi", Toast.LENGTH_SHORT).show()
         }
         .setNegativeButton("İptal", null).show()
+}
+
+// ── v6.6: AI ile karakter avatarı üretimi ─────────────────────────────────────
+
+/**
+ * Karakterin description/personality/scenario alanlarından İngilizce bir Dream API
+ * görsel prompt'u üretir (model context'ini bozmadan sendBypassPrompt ile), ardından
+ * Dream API'yi çağırıp sonucu [getAiAvatarsDir] dizinine PNG olarak kaydeder.
+ *
+ * NOT: Bu fonksiyon yalnızca ÜRETİLEN dosyayı [onDone] ile döner — karakteri kaydetmez.
+ * Kaydetme işlemi diyalog "Kaydet" butonuna basıldığında zaten yapılan akışla olur.
+ */
+internal fun MainActivity.generateAvatarForCharacter(
+    character: MayaCharacter,
+    onProgress: (String) -> Unit,
+    onDone: (File) -> Unit,
+    onError: (String) -> Unit
+) {
+    lifecycleScope.launch {
+        try {
+            onProgress("🧠 Görsel tarif oluşturuluyor…")
+
+            val bioText = listOf(character.description, character.personality, character.scenario)
+                .filter { it.isNotBlank() }
+                .joinToString(". ")
+                .ifBlank { "a person" }
+
+            val instruction = buildString {
+                appendLine("Aşağıdaki karakter tanımına uygun, İngilizce ve görüntü üretim modeli için ayrıntılı bir PORTRE (yüz/üst beden) tarifi yaz.")
+                appendLine("SADECE İngilizce sahne tarifini yaz, başka hiçbir şey ekleme. Maksimum 25 kelime.")
+                appendLine("Tarif fotogerçekçi bir portre fotoğrafı betimlemeli (örn: yaş, saç, göz rengi, ifade, kıyafet, arka plan).")
+                appendLine()
+                appendLine("Karakter adı: ${character.name}")
+                appendLine("Karakter tanımı: \"$bioText\"")
+            }
+
+            val fullPrompt = buildAvatarPromptTemplate(instruction)
+            val sb = StringBuilder()
+            try {
+                val impl = engine as? InferenceEngineImpl
+                val tokenFlow = if (impl != null) {
+                    impl.sendBypassPrompt(fullPrompt, 80)
+                } else {
+                    engine.sendUserPrompt(fullPrompt, predictLength = 80)
+                }
+                tokenFlow.collect { token -> sb.append(token) }
+            } catch (e: Exception) {
+                onError("LLM hatası: ${e.message}")
+                return@launch
+            }
+
+            val imagePrompt = extractAvatarPromptText(sb.toString())
+                .ifBlank { "professional portrait photo of $bioText" }
+
+            MainActivity.log("AvatarAI", "Üretilen prompt: $imagePrompt")
+
+            if (!dreamApiEnabled) {
+                onError("Dream API kapalı")
+                return@launch
+            }
+
+            onProgress("🎨 Görüntü oluşturuluyor…")
+
+            var dreamBitmap: Bitmap? = null
+            var dreamError: String? = null
+            val dreamReq = DreamRequest(
+                prompt         = imagePrompt,
+                negativePrompt = dreamDefaultNegativePrompt,
+                size           = dreamSize,
+                steps          = dreamSteps,
+                cfg            = dreamCfg,
+                seed           = if (dreamSeed < 0) System.currentTimeMillis() % 100000L else dreamSeed,
+                useOpenCl      = dreamUseOpenCl
+            )
+
+            performDreamRequest(dreamApiUrl, dreamReq) { event ->
+                when (event) {
+                    is DreamEvent.Progress -> onProgress("🎨 ${event.step}/${event.totalSteps} adım…")
+                    is DreamEvent.Complete -> dreamBitmap = event.bitmap
+                    is DreamEvent.Error    -> dreamError = event.message
+                }
+            }
+
+            val bmp = dreamBitmap
+            if (bmp == null) {
+                onError(dreamError ?: "Görüntü oluşturulamadı")
+                return@launch
+            }
+
+            onProgress("💾 Kaydediliyor…")
+            val avatarFile = withContext(Dispatchers.IO) { saveAiAvatarBitmap(bmp) }
+            onDone(avatarFile)
+
+        } catch (e: Exception) {
+            onError("Hata: ${e.message}")
+        }
+    }
+}
+
+/**
+ * [generateAvatarForCharacter] içinde üretilen prompt metnini Dream API çağrısı
+ * ÖLÇMEDEN doğrudan dışarıdan test edebilmek için ayrı tutulan, şablonsuz
+ * (template-bağımsız) prompt sarmalayıcısı.
+ *
+ * Gemma 4 (template=7) için thinking KAPALI tutulur — sadece kısa metin isteniyor.
+ */
+private fun MainActivity.buildAvatarPromptTemplate(instruction: String): String {
+    return when (selectedTemplate) {
+        0    -> instruction
+        1    -> "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$instruction<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+        2    -> "<|im_start|>user\n$instruction<|im_end|>\n<|im_start|>assistant\n"
+        3    -> "<bos><start_of_turn>user\n$instruction<end_of_turn>\n<start_of_turn>model\n"
+        4    -> "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$instruction<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        5    -> "<|start_of_role|>user<|end_of_role|>$instruction<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+        7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
+        else -> instruction
+    }
+}
+
+/**
+ * Model çıktısından thinking bloklarını ve format tokenlarını temizleyip
+ * yalnızca görsel tarif metnini döner. MainActivityMayagram.kt'deki
+ * extractVisibleContent ile aynı mantık — burada bağımsız tutuldu çünkü
+ * o fonksiyon private (dosya-dışı erişilemez).
+ */
+private fun extractAvatarPromptText(raw: String): String {
+    var text = raw
+
+    text = text.replace(
+        Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), ""
+    )
+    text = text.replace(
+        Regex("""<think>.*?</think>""",
+            setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)), ""
+    )
+    val thinkIdx = text.indexOf("<think>")
+    if (thinkIdx != -1) text = text.substring(0, thinkIdx)
+    val channelIdx = text.indexOf("<|channel>")
+    if (channelIdx != -1) text = text.substring(0, channelIdx)
+
+    text = text
+        .replace("<|END_OF_TURN_TOKEN|>", "")
+        .replace("<|START_OF_TURN_TOKEN|>", "")
+        .replace("<|USER_TOKEN|>", "")
+        .replace("<|CHATBOT_TOKEN|>", "")
+        .replace("<|im_end|>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<end_of_turn>", "")
+        .replace("<start_of_turn>", "")
+        .replace("<turn|>", "")
+        .replace("<|turn>", "")
+        .replace("<|channel>", "")
+        .replace("<channel|>", "")
+        .replace("<|end_of_text|>", "")
+        .replace("<|endoftext|>", "")
+        .replace(Regex("(?i)^(image[_ ]?prompt|caption|prompt)\\s*:\\s*"), "")
+        .replace("\"", "")
+        .trim()
+
+    return text
+}
+
+/** AI üretimli karakter avatarlarının kalıcı olarak saklandığı dizin. */
+internal fun MainActivity.getAiAvatarsDir(): File {
+    val dir = File(filesDir, "ai_avatars")
+    if (!dir.exists()) dir.mkdirs()
+    return dir
+}
+
+private fun MainActivity.saveAiAvatarBitmap(bitmap: Bitmap): File {
+    val dir = getAiAvatarsDir()
+    val file = File(dir, "avatar_${UUID.randomUUID()}.png")
+    FileOutputStream(file).use { out ->
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+    }
+    return file
 }
 
 // ── Avatar işleme ─────────────────────────────────────────────────────────────
@@ -510,7 +776,7 @@ internal fun MainActivity.stripCharPrefix(text: String): String {
  *  - null                         → emoji göster (ImageView gizlenir)
  *  - "drawable:maya_default_avatar" → gömülü Maya fotoğrafı
  *  - "content://..."              → galeriden seçilmiş fotoğraf
- *  - "file:/data/.../xyz.png"     → içe aktarılan tavern kartı avatarı (cacheDir dosyası)
+ *  - "file:/data/.../xyz.png"     → içe aktarılan tavern kartı veya AI üretimli avatar (filesDir dosyası)
  *
  * ImageView ve emoji TextView referansları verilir, uygun olanı gösterir.
  */
