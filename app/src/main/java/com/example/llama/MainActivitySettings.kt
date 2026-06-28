@@ -521,13 +521,17 @@ private fun MainActivity.addAboutSection(parent: LinearLayout) {
     parent.addView(card)
 }
 
-// ── v6.8: Mayagram otomatik paylaşım ayar kartı ──────────────────────────────
+// ── v6.8/v6.9: Mayagram otomatik paylaşım ayar kartı ─────────────────────────
 
 /**
  * Mayagram otomatik (zamanlı) paylaşım ayarlarını gösteren bölüm kartını [parent]'a
  * ekler. Diğer "Dream API" kartı gibi (buildDreamApiSettingsCard), kaydedilecek
  * değerleri toplayan bir lambda döner — showSettingsDialog()'daki "Kaydet"
  * butonunda çağrılır.
+ *
+ * v6.9: Sabit saat slider'ı yerine serbest dakika girişi (test için 1 dakika dahil),
+ * günlük maksimum paylaşım sınırı, ve alarmı beklemeden anında deneme yapabilmek
+ * için "▶ Şimdi Test Et" butonu eklendi.
  */
 private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout): () -> Unit {
     val dp     = resources.displayMetrics.density
@@ -536,7 +540,8 @@ private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout)
 
     val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
     val initialEnabled  = MayagramAutoPostScheduler.isEnabled(this)
-    val initialInterval = MayagramAutoPostScheduler.getIntervalHours(this)
+    val initialInterval = MayagramAutoPostScheduler.getIntervalMinutes(this)
+    val initialDailyLimit = MayagramAutoPostScheduler.getDailyLimit(this)
 
     // ── Aç/Kapa ───────────────────────────────────────────────────────────────
     val enableRow = LinearLayout(this).apply {
@@ -552,39 +557,71 @@ private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout)
     content.addView(enableRow)
     content.addView(hintText(
         "Açıksa, belirlenen aralıkta \"🔁 Otomatik Mayagram paylaşımına dahil et\" işaretli " +
-        "karakterlerden rastgele biri kendiliğinden bir gönderi paylaşır."
+        "karakterlerden rastgele biri kendiliğinden bir gönderi paylaşır. Dream API kapalıyken " +
+        "otomatik paylaşım yapılmaz (görselsiz paylaşım istenmiyor)."
     ))
 
-    // ── Aralık ────────────────────────────────────────────────────────────────
-    content.addView(subLabel("Paylaşım Aralığı: $initialInterval saat"))
-    val intervalLabel = content.getChildAt(content.childCount - 1) as TextView
-    val intervalBar = SeekBar(this).apply {
-        max = MayagramAutoPostScheduler.MAX_INTERVAL_HOURS - MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
-        progress = initialInterval - MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
-        setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
-                val hours = p + MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
-                intervalLabel.text = "Paylaşım Aralığı: $hours saat"
-            }
-            override fun onStartTrackingTouch(sb: SeekBar) {}
-            override fun onStopTrackingTouch(sb: SeekBar) {}
-        })
+    // ── Aralık (serbest dakika girişi) ────────────────────────────────────────
+    content.addView(subLabel("Paylaşım Aralığı (dakika)"))
+    val intervalRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
     }
-    content.addView(intervalBar)
-    content.addView(hintText("Her $initialInterval saatte bir, rastgele seçilen bir karakter otomatik gönderi paylaşır."))
+    val intervalEdit = android.widget.EditText(this).apply {
+        setText(initialInterval.toString())
+        inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        hint = "180"
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
+        }
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setHintTextColor(if (isDark) 0xFF666666.toInt() else 0xFF999999.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+    }
+    fun intervalQuickBtn(label: String, minutes: Int) = android.widget.Button(this).apply {
+        text = label; textSize = 11f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF1A2A3A.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
+        setOnClickListener { intervalEdit.setText(minutes.toString()) }
+    }
+    intervalRow.addView(intervalEdit)
+    intervalRow.addView(intervalQuickBtn("1dk", 1))      // test için
+    intervalRow.addView(intervalQuickBtn("30dk", 30))
+    intervalRow.addView(intervalQuickBtn("1sa", 60))
+    intervalRow.addView(intervalQuickBtn("3sa", 180))
+    intervalRow.addView(intervalQuickBtn("6sa", 360))
+    content.addView(intervalRow)
+    content.addView(hintText("\"1dk\" sadece test içindir — gerçek kullanımda Local Dream'i sürekli açık tutmamak için daha uzun bir aralık (1-6 saat) önerilir."))
 
-    // ── Dahil olan karakterler (bilgilendirme — salt okunur liste) ───────────
-    content.addView(subLabel("Dahil Olan Karakterler"))
-    val includedNames = characters.filter { it.autoPostEnabled }.map { "${it.emoji} ${it.name}" }
-    content.addView(TextView(this).apply {
-        text = if (includedNames.isEmpty())
-            "Henüz hiçbir karakter dahil edilmedi."
-        else includedNames.joinToString(", ")
-        textSize = 12f
-        setTextColor(if (isDark) 0xFFB0C8FF.toInt() else 0xFF2244AA.toInt())
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-    })
-    content.addView(hintText("Karakter listesinden bir karaktere uzun basıp \"✏️ Düzenle\" ile \"Otomatik paylaşıma dahil et\" anahtarını açabilirsiniz."))
+    // ── Günlük maksimum paylaşım sınırı ───────────────────────────────────────
+    content.addView(subLabel("Günlük Maksimum Paylaşım (0 = limitsiz)"))
+    val dailyLimitRow = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+    }
+    val dailyLimitEdit = android.widget.EditText(this).apply {
+        setText(initialDailyLimit.toString())
+        inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        hint = "6"
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; cornerRadius = (8*dp)
+            setColor(if (isDark) 0xFF1E1E2E.toInt() else 0xFFEEEEFF.toInt())
+            setStroke((1*dp).toInt(), if (isDark) 0xFF555577.toInt() else 0xFFAAAACC.toInt())
+        }
+        setTextColor(if (isDark) 0xFFE0E0E0.toInt() else 0xFF222222.toInt())
+        setHintTextColor(if (isDark) 0xFF666666.toInt() else 0xFF999999.toInt())
+        setPadding((8*dp).toInt(), (6*dp).toInt(), (8*dp).toInt(), (6*dp).toInt())
+    }
+    dailyLimitRow.addView(dailyLimitEdit)
+    content.addView(dailyLimitRow)
+
+    val todayCount = MayagramAutoPostScheduler.getTodayCount(this)
+    content.addView(hintText("Bugün şimdiye kadar $todayCount paylaşım yapıldı. Limite ulaşılınca o gün için otomatik paylaşım durur, ertesi gün sıfırlanır."))
 
     // ── Mayagram Modeli seçici (Rapor Modeli ile aynı desen) ─────────────────
     content.addView(subLabel("Mayagram Modeli"))
@@ -681,10 +718,71 @@ private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout)
     content.addView(noThinkRow)
     content.addView(hintText("Token tasarrufu sağlar. Diğer modelleri etkilemez."))
 
+    // ── Şimdi Test Et butonu ──────────────────────────────────────────────────
+    // Alarmı/aralığı beklemeden, mevcut (henüz kaydedilmemiş olsa bile az önce
+    // seçilen) ayarlarla bir kerelik deneme paylaşımı tetikler. Enabled/günlük
+    // limit kontrollerini atlar (INPUT_IS_MANUAL_TEST=true) — sırf test amaçlı
+    // olduğu için günlük sayaca da yansımaz.
+    val testBtn = android.widget.Button(this).apply {
+        text = "▶ Şimdi Test Et"; textSize = 13f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (10*dp).toInt() }
+        background = GradientDrawable().apply { cornerRadius = 8*dp; setColor(if (isDark) 0xFF1A3A1A.toInt() else 0xFFDDFFDD.toInt()) }
+        setTextColor(if (isDark) 0xFF88FF88.toInt() else 0xFF226622.toInt())
+    }
+    val testStatusLabel = TextView(this).apply {
+        textSize = 11f; alpha = 0.7f; visibility = android.view.View.GONE
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
+    }
+    content.addView(testBtn)
+    content.addView(testStatusLabel)
+    content.addView(hintText("Test, bu ekrandaki kaydedilmemiş model/şablon seçimini DEĞİL, son kaydedilmiş ayarları kullanır. Önce \"Kaydet\"e basıp sonra test etmeniz önerilir."))
+
+    testBtn.setOnClickListener {
+        val candidateCount = characters.count { it.autoPostEnabled }
+        if (candidateCount == 0) {
+            Toast.makeText(this, "Önce en az bir karakteri \"Otomatik paylaşıma dahil et\" ile işaretleyin.", Toast.LENGTH_LONG).show()
+            return@setOnClickListener
+        }
+        if (!dreamApiEnabled) {
+            Toast.makeText(this, "Dream API kapalıyken otomatik paylaşım çalışmaz. Önce Dream API'yi etkinleştirin.", Toast.LENGTH_LONG).show()
+            return@setOnClickListener
+        }
+        testStatusLabel.visibility = android.view.View.VISIBLE
+        testStatusLabel.text = "⏳ Test başlatıldı, arka planda çalışıyor…"
+        try {
+            val data = androidx.work.Data.Builder()
+                .putBoolean(MayagramAutoPostWorker.INPUT_IS_MANUAL_TEST, true)
+                .build()
+            val req = androidx.work.OneTimeWorkRequestBuilder<MayagramAutoPostWorker>().setInputData(data).build()
+            val wm = androidx.work.WorkManager.getInstance(applicationContext)
+            wm.enqueue(req)
+            wm.getWorkInfoByIdLiveData(req.id).observe(this@buildMayagramAutoPostSettingsCard) { info ->
+                if (info == null) return@observe
+                when (info.state) {
+                    androidx.work.WorkInfo.State.SUCCEEDED -> runOnUiThread {
+                        testStatusLabel.text = "✅ Test tamamlandı — Mayagram'ı açıp kontrol edin"
+                        Toast.makeText(this, "✅ Test gönderisi oluşturuldu", Toast.LENGTH_SHORT).show()
+                    }
+                    androidx.work.WorkInfo.State.FAILED -> runOnUiThread {
+                        testStatusLabel.text = "❌ Test başarısız oldu"
+                    }
+                    else -> {}
+                }
+            }
+        } catch (e: Exception) {
+            testStatusLabel.text = "❌ Hata: ${e.message}"
+        }
+    }
+
     // Kaydet lambda'sı
     return {
-        val intervalHours = intervalBar.progress + MayagramAutoPostScheduler.MIN_INTERVAL_HOURS
-        MayagramAutoPostScheduler.setEnabled(this, enableSwitch.isChecked, intervalHours)
+        val intervalMinutes = intervalEdit.text.toString().toIntOrNull()
+            ?.coerceIn(MayagramAutoPostScheduler.MIN_INTERVAL_MINUTES, MayagramAutoPostScheduler.MAX_INTERVAL_MINUTES)
+            ?: MayagramAutoPostScheduler.DEFAULT_INTERVAL_MINUTES
+        val dailyLimit = dailyLimitEdit.text.toString().toIntOrNull()
+            ?.coerceIn(MayagramAutoPostScheduler.MIN_DAILY_LIMIT, MayagramAutoPostScheduler.MAX_DAILY_LIMIT)
+            ?: MayagramAutoPostScheduler.DEFAULT_DAILY_LIMIT
+        MayagramAutoPostScheduler.setEnabled(this, enableSwitch.isChecked, intervalMinutes, dailyLimit)
 
         val templateToSave = if (currentTemplateSelection == 0) -1 else currentTemplateSelection - 1
         getSharedPreferences("llama_prefs", Context.MODE_PRIVATE).edit().apply {
@@ -695,6 +793,7 @@ private fun MainActivity.buildMayagramAutoPostSettingsCard(parent: LinearLayout)
         }.apply()
     }
 }
+
 
 // ── Ayarlar diyaloğu ──────────────────────────────────────────────────────────
 
