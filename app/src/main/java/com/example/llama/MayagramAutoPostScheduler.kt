@@ -42,7 +42,7 @@ object MayagramAutoPostScheduler {
 
     const val DEFAULT_DAILY_LIMIT = 6
     const val MIN_DAILY_LIMIT     = 0          // 0 = limitsiz
-    const val MAX_DAILY_LIMIT     = 0
+    const val MAX_DAILY_LIMIT     = 250
 
     private const val REQUEST_CODE = 70001
 
