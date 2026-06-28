@@ -30,6 +30,12 @@ class MayagramAutoPostReceiver : BroadcastReceiver() {
                     Log.i(TAG, "Otomatik paylaşım kapalı, alarm yok sayıldı")
                     return
                 }
+                if (MayagramAutoPostScheduler.isDailyLimitReached(context)) {
+                    Log.i(TAG, "Günlük paylaşım limitine ulaşıldı, bu tur atlandı")
+                    // Yine de bir sonraki tur için alarmı yeniden kur — gece yarısı geçince sayaç sıfırlanır.
+                    MayagramAutoPostScheduler.schedule(context)
+                    return
+                }
                 Log.i(TAG, "Otomatik paylaşım alarmı tetiklendi")
 
                 val request = OneTimeWorkRequestBuilder<MayagramAutoPostWorker>().build()
