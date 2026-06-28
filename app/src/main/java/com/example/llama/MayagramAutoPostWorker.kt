@@ -31,10 +31,11 @@ import java.io.FileOutputStream
  *
  * Akış:
  *   1. autoPostEnabled=true karakterlerden rastgele birini seç (yoksa sessizce çık)
- *   2. Mayagram modelini yükle (MainActivityDailyReport'taki gibi ayrı model desteği)
- *   3. Konusuz, karaktere uygun bir caption + (Dream API açıksa) image_prompt ürettir
- *   4. Dream API açıksa görüntü üret
- *   5. MayagramPost olarak DB'ye kaydet
+ *   2. Dream API kapalıysa tamamen atla (görselsiz paylaşım yapılmaz — kullanıcı tercihi)
+ *   3. Mayagram modelini yükle (MainActivityDailyReport'taki gibi ayrı model desteği)
+ *   4. Konusuz, karaktere uygun bir caption + image_prompt ürettir
+ *   5. Dream API ile görüntü üret
+ *   6. MayagramPost olarak DB'ye kaydet, günlük sayaçı güncelle
  */
 class MayagramAutoPostWorker(
     appContext: Context,
@@ -50,20 +51,38 @@ class MayagramAutoPostWorker(
         const val KEY_AUTOPOST_MODEL_ENTRY    = "mayagram_autopost_model_entry"
         const val KEY_AUTOPOST_MODEL_TEMPLATE = "mayagram_autopost_model_template"
         const val KEY_AUTOPOST_MODEL_NO_THINK = "mayagram_autopost_model_no_think"
+
+        /** "Şimdi Test Et" butonundan tetiklendiğinde true geçirilir — enabled/günlük limit kontrollerini atlar. */
+        const val INPUT_IS_MANUAL_TEST = "is_manual_test"
     }
 
     override suspend fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+        val isManualTest = inputData.getBoolean(INPUT_IS_MANUAL_TEST, false)
 
-        if (!MayagramAutoPostScheduler.isEnabled(applicationContext)) {
-            Log.i(TAG, "Otomatik paylaşım kapalı, iş atlandı")
-            return Result.success()
+        if (!isManualTest) {
+            if (!MayagramAutoPostScheduler.isEnabled(applicationContext)) {
+                Log.i(TAG, "Otomatik paylaşım kapalı, iş atlandı")
+                return Result.success()
+            }
+            if (MayagramAutoPostScheduler.isDailyLimitReached(applicationContext)) {
+                Log.i(TAG, "Günlük paylaşım limitine ulaşıldı, iş atlandı")
+                return Result.success()
+            }
         }
 
         val charactersJson = prefs.getString("characters_json", null)
         val candidates = loadAutoPostCandidates(charactersJson)
         if (candidates.isEmpty()) {
             Log.i(TAG, "autoPostEnabled karakter yok, iş atlandı")
+            return Result.success()
+        }
+
+        // ── v6.9: Dream API kapalıysa otomatik paylaşım tamamen atlanır ───────
+        // (görselsiz paylaşım istenmiyor — kullanıcı tercihi). Model yüklemeden
+        // önce kontrol edilir, böylece gereksiz CPU/pil tüketimi önlenir.
+        if (!prefs.getBoolean("dream_api_enabled", false)) {
+            Log.i(TAG, "Dream API kapalı, otomatik paylaşım bu turda atlandı (görselsiz paylaşım yapılmaz)")
             return Result.success()
         }
 
@@ -181,12 +200,11 @@ class MayagramAutoPostWorker(
                 }
             }
 
-            // ── Dream API ─────────────────────────────────────────────────────
+            // ── Dream API (buraya gelindiyse zaten açık olduğu garantili) ──────
             var imagePath: String? = null
             var usedPrompt: String? = null
-            val dreamEnabled = prefs.getBoolean("dream_api_enabled", false)
 
-            if (dreamEnabled && imagePrompt.isNotBlank()) {
+            if (imagePrompt.isNotBlank()) {
                 setForeground(buildProgressForeground("🎨 Görüntü oluşturuluyor…"))
                 usedPrompt = imagePrompt
 
@@ -240,6 +258,11 @@ class MayagramAutoPostWorker(
             )
             AppDatabase.getInstance(applicationContext).mayagramDao().insertPost(post)
             Log.i(TAG, "Otomatik gönderi kaydedildi: ${character.name}")
+
+            if (!isManualTest) {
+                MayagramAutoPostScheduler.incrementTodayCount(applicationContext)
+                Log.i(TAG, "Günlük sayaç güncellendi: ${MayagramAutoPostScheduler.getTodayCount(applicationContext)}/${MayagramAutoPostScheduler.getDailyLimit(applicationContext).let { if (it <= 0) "limitsiz" else it.toString() }}")
+            }
 
             try {
                 if (eng.state.value is InferenceEngine.State.ModelReady) {
