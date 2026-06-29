@@ -29,15 +29,23 @@ class MayagramFeedAdapter(
 ) : RecyclerView.Adapter<MayagramFeedAdapter.PostVH>() {
 
     private val posts = mutableListOf<MayagramPost>()
+    // v6.10: postId -> o postu beğenen karakterler (kullanıcı beğenisi dahil değil — o likeCount/isLikedByUser'da)
+    private val likesByPostId = mutableMapOf<String, List<MayagramPostLike>>()
 
     private val bitmapCache: LruCache<String, Bitmap> by lazy {
         val maxMem = (Runtime.getRuntime().maxMemory() / 1024).toInt()
         LruCache(maxMem / 6)
     }
 
-    fun submitList(newPosts: List<MayagramPost>) {
+    /**
+     * v6.10: [likes] haritası verilirse her post için "Maya ve 2 kişi beğendi" satırı gösterilir.
+     * Geriye dönük uyumluluk için parametre opsiyonel — verilmezse boş kabul edilir.
+     */
+    fun submitList(newPosts: List<MayagramPost>, likes: Map<String, List<MayagramPostLike>> = emptyMap()) {
         posts.clear()
         posts.addAll(newPosts)
+        likesByPostId.clear()
+        likesByPostId.putAll(likes)
         notifyDataSetChanged()
     }
 
@@ -87,8 +95,14 @@ class MayagramFeedAdapter(
         // ── Caption ───────────────────────────────────────────────────────────
         holder.tvCaption.text = post.caption
 
-        // ── Like butonu ───────────────────────────────────────────────────────
-        holder.btnLike.text = if (post.isLikedByUser) "❤️ ${post.likeCount}" else "🤍 ${post.likeCount}"
+        // ── v6.10: "Maya ve 2 kişi beğendi" satırı ────────────────────────────
+        val charLikes = likesByPostId[post.id].orEmpty()
+        holder.tvLikedBy.text = buildLikedByText(charLikes, post.isLikedByUser)
+        holder.tvLikedBy.visibility = if (holder.tvLikedBy.text.isNotEmpty()) View.VISIBLE else View.GONE
+
+        // ── Like butonu — toplam sayı: kullanıcı beğenisi + karakter beğenileri ─
+        val totalLikes = post.likeCount + charLikes.size
+        holder.btnLike.text = if (post.isLikedByUser) "❤️ $totalLikes" else "🤍 $totalLikes"
         holder.btnLike.setOnClickListener { onLike(post) }
 
         // ── Yorum butonu ──────────────────────────────────────────────────────
@@ -96,6 +110,25 @@ class MayagramFeedAdapter(
 
         // ── Sil butonu ────────────────────────────────────────────────────────
         holder.btnDelete.setOnClickListener { onDelete(post) }
+    }
+
+    /**
+     * v6.10: "Maya ve 2 kişi beğendi" / "Maya, Aria ve 1 kişi beğendi" / "Sen beğendin" gibi
+     * Instagram tarzı özet metni üretir. Hem karakter beğenileri hem kullanıcının kendi
+     * beğenisi (varsa "Sen" olarak) birleştirilir.
+     */
+    private fun buildLikedByText(charLikes: List<MayagramPostLike>, likedByUser: Boolean): String {
+        val names = mutableListOf<String>()
+        if (likedByUser) names.add("Sen")
+        names.addAll(charLikes.map { it.characterName })
+
+        if (names.isEmpty()) return ""
+
+        return when (names.size) {
+            1 -> "❤️ ${names[0]} beğendi"
+            2 -> "❤️ ${names[0]} ve ${names[1]} beğendi"
+            else -> "❤️ ${names[0]}, ${names[1]} ve ${names.size - 2} kişi daha beğendi"
+        }
     }
 
     // ── Avatar yardımcısı ─────────────────────────────────────────────────────
@@ -181,6 +214,7 @@ class MayagramFeedAdapter(
         val tvTime: TextView      = view.findViewById(R.id.mg_time)
         val ivPostImage: ImageView = view.findViewById(R.id.mg_post_image)
         val tvCaption: TextView   = view.findViewById(R.id.mg_caption)
+        val tvLikedBy: TextView   = view.findViewById(R.id.mg_liked_by)
         val btnLike: TextView     = view.findViewById(R.id.mg_btn_like)
         val btnComment: TextView  = view.findViewById(R.id.mg_btn_comment)
         val btnDelete: TextView   = view.findViewById(R.id.mg_btn_delete)
