@@ -361,7 +361,7 @@ internal fun MainActivity.triggerAutoLikes(
     post: MayagramPost,
     candidates: List<MayaCharacter>,
     minLikes: Int = 1,
-    maxLikes: Int = 3
+    maxLikes: Int = 3000
 ) {
     if (candidates.isEmpty()) return
 
