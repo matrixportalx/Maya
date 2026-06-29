@@ -101,10 +101,18 @@ class MayagramActivity : AppCompatActivity() {
 
     // ── Feed gözlem ───────────────────────────────────────────────────────────
 
+    /**
+     * v6.10: Postlar değiştiğinde (yeni paylaşım, silme vb.) her post için karakter
+     * beğenilerini de DB'den çekip adapter'a iletir. Post sayısı genelde küçük olduğundan
+     * (onlarca-yüzlerce) her post için ayrı sorgu performans sorunu yaratmaz.
+     */
     private fun observeFeed() {
         lifecycleScope.launch {
             db.mayagramDao().getAllPosts().collectLatest { posts ->
-                feedAdapter.submitList(posts)
+                val likesByPostId = withContext(Dispatchers.IO) {
+                    posts.associate { post -> post.id to db.mayagramDao().getCharacterLikesForPost(post.id) }
+                }
+                feedAdapter.submitList(posts, likesByPostId)
                 tvEmpty.visibility = if (posts.isEmpty()) View.VISIBLE else View.GONE
                 rvFeed.visibility  = if (posts.isEmpty()) View.GONE   else View.VISIBLE
             }
@@ -411,17 +419,29 @@ class MayagramActivity : AppCompatActivity() {
         fabNewPost.isEnabled        = true
     }
 
-    /** Gönderi yayınlandıktan sonra diğer karakterlerden otomatik yorum (post sahibi hariç tüm karakterler arasından) */
+    /**
+     * Gönderi yayınlandıktan sonra diğer karakterlerden otomatik yorum VE beğeni tetikler
+     * (post sahibi hariç tüm karakterler arasından).
+     *
+     * v6.10: Beğeniler yorumlardan bağımsızdır — LLM çağrısı gerektirmediğinden hemen
+     * tetiklenir, model meşgul olsa bile çalışır. Yorumlayan karakterlerle beğenen
+     * karakterler kesişebilir (biri hem yorum hem beğeni bırakabilir, gerçek sosyal medya
+     * davranışına benzer şekilde) — bu kasıtlıdır, ayrı havuzlardan seçilirler.
+     */
     private fun scheduleAutoComments(post: MayagramPost) {
         val main = MainActivity.currentInstance ?: return
         val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
         val allChars = loadCharacters(prefs.getString("characters_json", null))
         if (allChars.isEmpty()) return
 
-        val commenters = allChars
-            .filter { it.id != post.characterId } // post.characterId kullanıcı postunda "user" — hiçbir karakterle eşleşmez, hepsi havuzda kalır
-            .shuffled()
-            .take(2)
+        val otherChars = allChars.filter { it.id != post.characterId }
+        if (otherChars.isEmpty()) return
+
+        // ── Beğeniler: yorumdan bağımsız, anında tetiklenir ──────────────────
+        main.triggerAutoLikes(post, otherChars)
+
+        // ── Yorumlar: LLM gerektirir, model meşgulse atlanabilir ─────────────
+        val commenters = otherChars.shuffled().take(2)
 
         lifecycleScope.launch {
             commenters.forEach { commenter ->
@@ -664,6 +684,7 @@ class MayagramActivity : AppCompatActivity() {
             .setPositiveButton("Sil") { _, _ ->
                 lifecycleScope.launch(Dispatchers.IO) {
                     db.mayagramDao().deleteCommentsForPost(post.id)
+                    db.mayagramDao().deleteCharacterLikesForPost(post.id)
                     db.mayagramDao().deletePost(post.id)
                     post.imagePath?.let { File(it).delete() }
                 }
