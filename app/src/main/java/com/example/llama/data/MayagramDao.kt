@@ -4,6 +4,7 @@ import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 import tr.maya.MayagramComment
 import tr.maya.MayagramPost
+import tr.maya.MayagramPostLike
 
 @Dao
 interface MayagramDao {
@@ -51,4 +52,22 @@ interface MayagramDao {
 
     @Query("DELETE FROM mayagram_comments WHERE postId = :postId")
     suspend fun deleteCommentsForPost(postId: String)
+
+    // ── v6.10: Karakter beğenileri ───────────────────────────────────────────
+
+    /** Aynı karakter aynı postu iki kez beğenemesin diye IGNORE — (postId, characterId) zaten primary key. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCharacterLike(like: MayagramPostLike)
+
+    @Query("SELECT * FROM mayagram_post_likes WHERE postId = :postId ORDER BY timestamp ASC")
+    suspend fun getCharacterLikesForPost(postId: String): List<MayagramPostLike>
+
+    @Query("SELECT COUNT(*) FROM mayagram_post_likes WHERE postId = :postId")
+    suspend fun characterLikeCount(postId: String): Int
+
+    @Query("SELECT COUNT(*) FROM mayagram_post_likes WHERE postId = :postId AND characterId = :characterId")
+    suspend fun hasCharacterLiked(postId: String, characterId: String): Int
+
+    @Query("DELETE FROM mayagram_post_likes WHERE postId = :postId")
+    suspend fun deleteCharacterLikesForPost(postId: String)
 }
