@@ -99,9 +99,21 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="12dp"
+        android:paddingBottom="4dp"
         android:textSize="14sp"
         android:lineSpacingMultiplier="1.35"
         android:textColor="?attr/colorOnSurface" />
+
+    <!-- v6.10: "Maya ve 2 kişi beğendi" satırı — beğeni yoksa GONE olur (adapter ayarlar) -->
+    <TextView
+        android:id="@+id/mg_liked_by"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="12dp"
+        android:paddingBottom="6dp"
+        android:textSize="12sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:visibility="gone" />
 
     <!-- Aksiyon çubuğu: Like + Yorum -->
     <LinearLayout
