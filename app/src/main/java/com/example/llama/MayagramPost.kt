@@ -46,3 +46,21 @@ data class MayagramComment(
     val parentCommentId: String? = null, // v6.5: yanıt verilen yorumun ID'si (null = post'a direkt yorum)
     val authorIsUser: Boolean = false    // v6.5: bu yorumu kullanıcı mı yazdı
 )
+
+/**
+ * v6.10: Bir gönderiyi beğenen KARAKTERİ temsil eder.
+ * Kullanıcının kendi beğenisi hâlâ MayagramPost.likeCount / isLikedByUser alanlarında tutulur
+ * (geriye dönük uyumluluk — mevcut davranış bozulmaz). Bu tablo SADECE karakterlerin
+ * "Maya ve 2 kişi beğendi" gibi gösterilebilmesi için kim-beğendi bilgisini tutar.
+ *
+ * Bir (postId, characterId) çifti için en fazla bir kayıt olur — aynı karakter bir
+ * gönderiyi iki kez "beğenemez" (insertLike OnConflictStrategy.IGNORE kullanır).
+ */
+@Entity(tableName = "mayagram_post_likes", primaryKeys = ["postId", "characterId"])
+data class MayagramPostLike(
+    val postId: String,
+    val characterId: String,          // karakter ID'si (kullanıcı beğenisi bu tabloya hiç girmez)
+    val characterName: String,        // Denormalized — karakter silinse de gösterilir
+    val characterEmoji: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
