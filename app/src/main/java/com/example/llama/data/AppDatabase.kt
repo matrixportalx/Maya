@@ -8,15 +8,17 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import tr.maya.MayagramComment
 import tr.maya.MayagramPost
+import tr.maya.MayagramPostLike
 
 @Database(
     entities = [
         Conversation::class,
         DbMessage::class,
         MayagramPost::class,
-        MayagramComment::class
+        MayagramComment::class,
+        MayagramPostLike::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -82,6 +84,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Versiyon 5 → 6: Karakterlerin gönderi beğenmesi (kim beğendi tablosu) eklendi
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS mayagram_post_likes (
+                        postId TEXT NOT NULL,
+                        characterId TEXT NOT NULL,
+                        characterName TEXT NOT NULL,
+                        characterEmoji TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        PRIMARY KEY(postId, characterId)
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -89,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "llama_chat.db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { INSTANCE = it }
             }
     }
