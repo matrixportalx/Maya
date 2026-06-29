@@ -342,6 +342,53 @@ internal fun MainActivity.generateCharacterComment(
     }
 }
 
+// ── v6.10: Karakterlerin gönderiyi otomatik beğenmesi ─────────────────────────
+
+/**
+ * Verilen [post]'u, post sahibi hariç tüm karakterler arasından rastgele seçilen
+ * [candidates] listesinden beğeni bırakır. LLM çağrısı GEREKTİRMEZ — beğeni üretimi
+ * yorum gibi metin üretimi değildir, sadece "kim beğendi" kaydı eklenir, bu yüzden
+ * model meşgul/yüklü olmasa da çalışır ve anında tamamlanır.
+ *
+ * Her beğeni arasında küçük bir gecikme bırakılır (yorumlardaki gibi), böylece akışta
+ * "beğeniler" de zamana yayılmış gibi görünür — ama bu sadece kozmetik, LLM'e bağımlı değil.
+ *
+ * NOT: Bu fonksiyon `mayagram_posts.likeCount`/`isLikedByUser` alanlarına DOKUNMAZ.
+ * O alanlar yalnızca kullanıcının kendi beğenisi için kullanılır (MayagramActivity.handleLike).
+ * Karakter beğenileri ayrı `mayagram_post_likes` tablosunda tutulur.
+ */
+internal fun MainActivity.triggerAutoLikes(
+    post: MayagramPost,
+    candidates: List<MayaCharacter>,
+    minLikes: Int = 1,
+    maxLikes: Int = 3
+) {
+    if (candidates.isEmpty()) return
+
+    val likeCount = (minLikes..maxLikes).random().coerceAtMost(candidates.size)
+    if (likeCount <= 0) return
+
+    val likers = candidates.shuffled().take(likeCount)
+
+    lifecycleScope.launch {
+        val db = AppDatabase.getInstance(this@triggerAutoLikes)
+        likers.forEachIndexed { index, character ->
+            kotlinx.coroutines.delay(400L + (index * 350L))
+            withContext(Dispatchers.IO) {
+                db.mayagramDao().insertCharacterLike(
+                    MayagramPostLike(
+                        postId        = post.id,
+                        characterId   = character.id,
+                        characterName = character.name,
+                        characterEmoji = character.emoji
+                    )
+                )
+            }
+            MainActivity.log("Mayagram", "❤️ ${character.name} '${post.caption.take(20)}' gönderisini beğendi")
+        }
+    }
+}
+
 // ── Prompt oluşturucular ──────────────────────────────────────────────────────
 
 /**
