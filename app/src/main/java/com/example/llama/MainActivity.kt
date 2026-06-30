@@ -178,6 +178,13 @@ class MainActivity : AppCompatActivity() {
     internal var topK: Int = 40
     internal var noThinking: Boolean = false
     internal var autoLoadLastModel: Boolean = false
+    // ── Otomatik model yükleme modu ───────────────────────────────────────────
+    // "manual"     → kullanıcı elle seçer
+    // "on_startup" → açılışta son modeli yükle (eski autoLoadLastModel davranışı)
+    // "on_action"  → mesaj/gönderi tetiklenince model yoksa otomatik yükle
+    internal var autoLoadMode: String = "manual"
+    // on_action modunda yüklenecek özel model (null = son yüklü model)
+    internal var autoLoadModelEntry: String? = null
     internal var flashAttnMode: Int = 1
     internal var useMmap: Boolean = true
     internal var useMlock: Boolean = false
