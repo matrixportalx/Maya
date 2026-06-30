@@ -123,6 +123,8 @@ internal fun MainActivity.saveSettings() {
         .putInt("top_k", topK)
         .putBoolean("no_thinking", noThinking)
         .putBoolean("auto_load_last_model", autoLoadLastModel)
+        .putString("auto_load_mode", autoLoadMode)
+        .putString("auto_load_model_entry", autoLoadModelEntry ?: "")
         .putInt("flash_attn_mode", flashAttnMode)
         .putBoolean("use_mmap", useMmap)
         .putBoolean("use_mlock", useMlock)
