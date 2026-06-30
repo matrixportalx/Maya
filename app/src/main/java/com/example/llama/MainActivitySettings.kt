@@ -31,6 +31,12 @@ internal fun MainActivity.loadSettings() {
     topK              = prefs.getInt("top_k", 40)
     noThinking        = prefs.getBoolean("no_thinking", false)
     autoLoadLastModel = prefs.getBoolean("auto_load_last_model", false)
+    autoLoadMode       = prefs.getString("auto_load_mode", "manual") ?: "manual"
+    autoLoadModelEntry = prefs.getString("auto_load_model_entry", null)
+    // Geriye dönük uyumluluk: eski autoLoadLastModel=true ise on_startup moduna yükselt
+    if (autoLoadLastModel && autoLoadMode == "manual") {
+        autoLoadMode = "on_startup"
+    }
     flashAttnMode     = prefs.getInt("flash_attn_mode", 1)
     useMmap           = prefs.getBoolean("use_mmap", true)
     useMlock          = prefs.getBoolean("use_mlock", false)
