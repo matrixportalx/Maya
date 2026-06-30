@@ -998,7 +998,85 @@ internal fun MainActivity.showSettingsDialog() {
     autoLoadRow.addView(autoLoadLabel); autoLoadRow.addView(autoLoadSwitch)
     secLoad.addView(autoLoadRow)
     secLoad.addView(hintText("Uygulama açılınca son yüklü model otomatik hazırlanır."))
+// ── Otomatik yükleme modu ─────────────────────────────────────────────────
+    secLoad.addView(subLabel("Otomatik Model Yükleme Modu"))
+    val modeGroupLoad = RadioGroup(ctx).apply { orientation = RadioGroup.VERTICAL }
+    val rbManual    = RadioButton(ctx).apply { text = "✋ Manuel — yalnızca elle seç";              id = android.view.View.generateViewId() }
+    val rbOnStartup = RadioButton(ctx).apply { text = "🚀 Açılışta — uygulama açılırken yükle";    id = android.view.View.generateViewId() }
+    val rbOnAction  = RadioButton(ctx).apply { text = "⚡ Tetiklenince — mesaj/gönderi yazınca yükle"; id = android.view.View.generateViewId() }
+    modeGroupLoad.addView(rbManual); modeGroupLoad.addView(rbOnStartup); modeGroupLoad.addView(rbOnAction)
+    when (autoLoadMode) {
+        "on_startup" -> rbOnStartup.isChecked = true
+        "on_action"  -> rbOnAction.isChecked  = true
+        else         -> rbManual.isChecked    = true
+    }
+    secLoad.addView(modeGroupLoad)
+    secLoad.addView(hintText("Tetiklenince modunda model yüklü değilse, mesaj gönderme veya Mayagram paylaşımı otomatik modeli yükler."))
 
+    // ── on_action için model seçici ───────────────────────────────────────────
+    secLoad.addView(subLabel("Tetikleme Modeli (boşsa son yüklü model kullanılır)"))
+    var currentAutoLoadEntry = autoLoadModelEntry
+
+    fun autoLoadModelDisplayName(): String {
+        val entry = currentAutoLoadEntry ?: return "Son yüklü model (otomatik)"
+        return MainActivity.entryDisplayName(entry)
+    }
+
+    val autoModelRow = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (4*dp).toInt() }
+    }
+    val autoModelNameLabel = TextView(ctx).apply {
+        text = autoLoadModelDisplayName(); textSize = 12f
+        setTextColor(if (isDark) 0xFFB0C8FF.toInt() else 0xFF2244AA.toInt())
+        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+    }
+    val autoModelSelectBtn = android.widget.Button(ctx).apply {
+        text = "Seç"; textSize = 12f; isAllCaps = false
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (8*dp).toInt() }
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF1A3A5C.toInt() else 0xFFDDEEFF.toInt()) }
+        setTextColor(if (isDark) 0xFF88AAFF.toInt() else 0xFF2244AA.toInt())
+    }
+    val autoModelClearBtn = android.widget.Button(ctx).apply {
+        text = "✕"; textSize = 12f
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = (4*dp).toInt() }
+        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 6*dp; setColor(if (isDark) 0xFF3A1A1A.toInt() else 0xFFFFDDDD.toInt()) }
+        setTextColor(if (isDark) 0xFFFF8888.toInt() else 0xFFAA2222.toInt())
+    }
+    autoModelRow.addView(autoModelNameLabel); autoModelRow.addView(autoModelSelectBtn); autoModelRow.addView(autoModelClearBtn)
+    secLoad.addView(autoModelRow)
+    secLoad.addView(hintText("Örn: hafif/hızlı model (E2B) tetikleme için, ağır model (E4B) için menüden elle seçilir."))
+
+    autoModelSelectBtn.setOnClickListener {
+        val savedModels = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+            .getStringSet("saved_models", mutableSetOf())!!.toMutableList()
+        val modelsDir = getExternalFilesDir("models") ?: filesDir
+        val cachedModels = savedModels.filter { entry ->
+            if (MainActivity.isUriEntry(entry)) {
+                val name = MainActivity.entryDisplayName(entry)
+                java.io.File(modelsDir, "model_$name").exists()
+            } else java.io.File(entry).exists()
+        }
+        if (cachedModels.isEmpty()) {
+            Toast.makeText(ctx, "Önbellekte model yok. Önce bir modeli normal şekilde yükleyin.", Toast.LENGTH_LONG).show()
+            return@setOnClickListener
+        }
+        val names = cachedModels.map { entry ->
+            val name = MainActivity.entryDisplayName(entry)
+            if (entry == currentAutoLoadEntry) "✓ $name" else name
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(ctx).setTitle("Tetikleme Modeli Seç")
+            .setItems(names) { _, which ->
+                currentAutoLoadEntry = cachedModels[which]
+                autoModelNameLabel.text = autoLoadModelDisplayName()
+            }.setNegativeButton("İptal", null).show()
+    }
+    autoModelClearBtn.setOnClickListener {
+        currentAutoLoadEntry = null
+        autoModelNameLabel.text = autoLoadModelDisplayName()
+    }
+    
     val bypassRow = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (4*dp).toInt() }
