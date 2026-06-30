@@ -433,14 +433,15 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch { ensureActiveConversation() }
 
-        if (autoLoadLastModel) {
-            val lastEntry = prefs.getString("last_loaded_model", null)
-            if (lastEntry != null) {
+        if (autoLoadMode == "on_startup" || autoLoadLastModel) {
+            val entryToLoad = autoLoadModelEntry
+                ?: prefs.getString("last_loaded_model", null)
+            if (entryToLoad != null) {
                 val savedModels = prefs.getStringSet("saved_models", mutableSetOf())!!
-                if (savedModels.contains(lastEntry)) {
-                    val modelKey = "template_${entryDisplayName(lastEntry)}"
+                if (savedModels.contains(entryToLoad)) {
+                    val modelKey = "template_${entryDisplayName(entryToLoad)}"
                     selectedTemplate = prefs.getInt(modelKey, 0)
-                    loadModel(lastEntry)
+                    loadModel(entryToLoad)
                 }
             }
         }
