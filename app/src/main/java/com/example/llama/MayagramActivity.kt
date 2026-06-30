@@ -419,7 +419,7 @@ class MayagramActivity : AppCompatActivity() {
                     Toast.makeText(this, "❌ $msg", Toast.LENGTH_LONG).show()
                 }
             }
-        }
+        )
     }
 
     private fun hideProgress() {
