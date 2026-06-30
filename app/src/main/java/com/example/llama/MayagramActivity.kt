@@ -381,47 +381,52 @@ class MayagramActivity : AppCompatActivity() {
 
     // ── Post üretimi (karakter) ────────────────────────────────────────────────
 
+    private fun startCharacterPostGeneration(
+    character: MayaCharacter,
+    topic: String?,
+    main: MainActivity
+) {
     if (main.loadedModelPath == null) {
-            if (main.autoLoadMode == "on_action") {
-                progressBar.visibility      = View.VISIBLE
-                tvProgressStatus.visibility = View.VISIBLE
-                tvProgressStatus.text       = "⏳ Model yükleniyor…"
-                fabNewPost.isEnabled        = false
-                main.triggerAutoLoadModel {
-                    startCharacterPostGeneration(character, topic, main)
-                }
-            } else {
-                Toast.makeText(this, "⚠️ Model yüklü değil — önce Maya'dan model yükleyin", Toast.LENGTH_LONG).show()
+        if (main.autoLoadMode == "on_action") {
+            progressBar.visibility      = View.VISIBLE
+            tvProgressStatus.visibility = View.VISIBLE
+            tvProgressStatus.text       = "⏳ Model yükleniyor…"
+            fabNewPost.isEnabled        = false
+            main.triggerAutoLoadModel {
+                startCharacterPostGeneration(character, topic, main)
             }
-            return
+        } else {
+            Toast.makeText(this, "⚠️ Model yüklü değil — önce Maya'dan model yükleyin", Toast.LENGTH_LONG).show()
         }
-
-        progressBar.visibility      = View.VISIBLE
-        tvProgressStatus.visibility = View.VISIBLE
-        fabNewPost.isEnabled        = false
-
-        main.generateMayagramPost(
-            character  = character,
-            topic      = topic,
-            onProgress = { status ->
-                runOnUiThread { tvProgressStatus.text = status }
-            },
-            onDone = { post ->
-                runOnUiThread {
-                    hideProgress()
-                    Toast.makeText(this, "✅ ${character.name} paylaştı!", Toast.LENGTH_SHORT).show()
-                    scheduleAutoComments(post)
-                }
-            },
-            onError = { msg ->
-                runOnUiThread {
-                    hideProgress()
-                    Toast.makeText(this, "❌ $msg", Toast.LENGTH_LONG).show()
-                }
-            }
-        )
+        return
     }
 
+    progressBar.visibility      = View.VISIBLE
+    tvProgressStatus.visibility = View.VISIBLE
+    fabNewPost.isEnabled        = false
+
+    main.generateMayagramPost(
+        character  = character,
+        topic      = topic,
+        onProgress = { status ->
+            runOnUiThread { tvProgressStatus.text = status }
+        },
+        onDone = { post ->
+            runOnUiThread {
+                hideProgress()
+                Toast.makeText(this, "✅ ${character.name} paylaştı!", Toast.LENGTH_SHORT).show()
+                scheduleAutoComments(post)
+            }
+        },
+        onError = { msg ->
+            runOnUiThread {
+                hideProgress()
+                Toast.makeText(this, "❌ $msg", Toast.LENGTH_LONG).show()
+            }
+        }
+    )
+}
+    
     private fun hideProgress() {
         progressBar.visibility      = View.GONE
         tvProgressStatus.visibility = View.GONE
