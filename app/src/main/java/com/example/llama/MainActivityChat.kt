@@ -598,8 +598,14 @@ private fun MainActivity.cleanFullResponse(raw: String): String {
 // ── Üretim döngüsü ────────────────────────────────────────────────────────────
 
 internal fun MainActivity.sendMessageContent(messages: List<ChatMessage>) {
-    if (loadedModelPath == null) { Toast.makeText(this, "Önce bir model yükleyin", Toast.LENGTH_SHORT).show(); return }
-
+    if (loadedModelPath == null) {
+        if (autoLoadMode == "on_action") {
+            triggerAutoLoadModel { sendMessageContent(messages) }
+        } else {
+            Toast.makeText(this, "Önce bir model yükleyin", Toast.LENGTH_SHORT).show()
+        }
+        return
+    }
     val serviceIntent = Intent(this, MayaForegroundService::class.java)
     startService(serviceIntent)
     bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
