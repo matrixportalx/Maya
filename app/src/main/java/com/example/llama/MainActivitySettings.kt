@@ -1663,6 +1663,14 @@ internal fun MainActivity.showSettingsDialog() {
         topK              = maxOf(1, topKBar.progress)
         noThinking        = noThinkingSwitch.isChecked
         autoLoadLastModel = autoLoadSwitch.isChecked
+        autoLoadMode = when {
+            rbOnStartup.isChecked -> "on_startup"
+            rbOnAction.isChecked  -> "on_action"
+            else                  -> "manual"
+        }
+        // Geriye dönük uyumluluk: on_startup modunu eski boolean ile senkronize tut
+        autoLoadLastModel = (autoLoadMode == "on_startup")
+        autoLoadModelEntry = currentAutoLoadEntry
         flashAttnMode     = when {
             rbFlashOff.isChecked -> 0
             rbFlashOn.isChecked  -> 2
