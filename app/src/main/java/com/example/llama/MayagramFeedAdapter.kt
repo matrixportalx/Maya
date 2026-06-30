@@ -127,7 +127,7 @@ class MayagramFeedAdapter(
         return when (names.size) {
             1 -> "❤️ ${names[0]} beğendi"
             2 -> "❤️ ${names[0]} ve ${names[1]} beğendi"
-            3 -> "❤️ ${names[0]} ve ${names[1]} ${names[2]} beğendi"
+            3 -> "❤️ ${names[0]}, ${names[1]} ve ${names[2]} beğendi"
             else -> "❤️ ${names[0]}, ${names[1]} ${names[2]} ve ${names.size - 3} kişi daha beğendi"
         }
     }
