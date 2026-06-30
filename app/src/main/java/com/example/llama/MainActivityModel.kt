@@ -479,3 +479,46 @@ internal fun MainActivity.clearSelectedImage() {
     imagePreviewContainer.visibility = View.GONE
     imagePreviewView.setImageDrawable(null)
 }
+// ── On-action otomatik model yükleme ─────────────────────────────────────────
+
+/**
+ * on_action modunda model yüklü değilse tetikleme modelini yükler,
+ * yükleme tamamlanınca [onReady] callback'ini çağırır.
+ */
+internal fun MainActivity.triggerAutoLoadModel(onReady: () -> Unit) {
+    val prefs = getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
+    val entryToLoad = autoLoadModelEntry
+        ?: prefs.getString("last_loaded_model", null)
+    if (entryToLoad == null) {
+        Toast.makeText(this, "Önce bir model yükleyin (Ayarlar → Tetikleme Modeli)", Toast.LENGTH_LONG).show()
+        return
+    }
+    val savedModels = prefs.getStringSet("saved_models", mutableSetOf())!!
+    if (!savedModels.contains(entryToLoad)) {
+        Toast.makeText(this, "Tetikleme modeli listede bulunamadı", Toast.LENGTH_LONG).show()
+        return
+    }
+    Toast.makeText(this, "⏳ Model yükleniyor…", Toast.LENGTH_SHORT).show()
+    val modelKey = "template_${MainActivity.entryDisplayName(entryToLoad)}"
+    selectedTemplate = prefs.getInt(modelKey, 0)
+
+    lifecycleScope.launch {
+        loadModelAsync(entryToLoad)
+        onReady()
+    }
+}
+
+/**
+ * loadModel() ile aynı ama coroutine içinde çağrılabilir ve tamamlanınca döner.
+ * Model zaten yüklüyse hemen döner.
+ */
+internal suspend fun MainActivity.loadModelAsync(entry: String) {
+    if (loadedModelPath == entry) return
+    loadModel(entry)
+    // Model hazır olana kadar bekle (max 60 sn)
+    var waited = 0
+    while (loadedModelPath == null && waited < 600) {
+        kotlinx.coroutines.delay(100)
+        waited++
+    }
+}
