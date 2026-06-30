@@ -381,9 +381,18 @@ class MayagramActivity : AppCompatActivity() {
 
     // ── Post üretimi (karakter) ────────────────────────────────────────────────
 
-    private fun startCharacterPostGeneration(character: MayaCharacter, topic: String?, main: MainActivity) {
-        if (main.loadedModelPath == null) {
-            Toast.makeText(this, "⚠️ Model yüklü değil — önce Maya'dan model yükleyin", Toast.LENGTH_LONG).show()
+    if (main.loadedModelPath == null) {
+            if (main.autoLoadMode == "on_action") {
+                progressBar.visibility      = View.VISIBLE
+                tvProgressStatus.visibility = View.VISIBLE
+                tvProgressStatus.text       = "⏳ Model yükleniyor…"
+                fabNewPost.isEnabled        = false
+                main.triggerAutoLoadModel {
+                    startCharacterPostGeneration(character, topic, main)
+                }
+            } else {
+                Toast.makeText(this, "⚠️ Model yüklü değil — önce Maya'dan model yükleyin", Toast.LENGTH_LONG).show()
+            }
             return
         }
 
