@@ -510,6 +510,7 @@ class MainActivity : AppCompatActivity() {
             R.id.action_model_info   -> { showModelInfoDialog(); true }
             R.id.action_export_chat  -> { exportChat(); true }
             R.id.action_clear_chat   -> { clearCurrentChat(); true }
+            R.id.action_user_profiles -> { showUserProfileManagerDialog(); true }
             R.id.action_settings     -> { showSettingsDialog(); true }
             R.id.action_backup       -> { backupChats(); true }
             R.id.action_restore      -> { showRestorePicker(); true }
