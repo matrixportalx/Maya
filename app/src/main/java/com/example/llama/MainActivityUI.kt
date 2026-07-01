@@ -121,11 +121,9 @@ internal fun MainActivity.setupFab() {
 internal fun MainActivity.updateFabIcon() {
     fab.setImageResource(when {
         isGenerating -> android.R.drawable.ic_media_pause
-        loadedModelPath == null -> android.R.drawable.ic_menu_add
         else -> android.R.drawable.ic_menu_send
     })
 }
-
 internal fun MainActivity.setupInput() {
     messageInput.setOnEditorActionListener { _, _, _ ->
         if (!isGenerating && loadedModelPath != null) sendMessage()
