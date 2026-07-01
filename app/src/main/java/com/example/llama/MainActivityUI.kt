@@ -112,7 +112,6 @@ internal fun MainActivity.setupFab() {
     fab.setOnClickListener {
         when {
             isGenerating -> stopGeneration()
-            loadedModelPath == null -> showModelPickerDialog()
             else -> sendMessage()
         }
     }
