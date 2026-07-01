@@ -40,6 +40,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_user_profiles"
+        android:title="👥 Kullanıcı Profilleri"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/action_settings"
         android:title="⚙️ Ayarlar"
         app:showAsAction="never" />
