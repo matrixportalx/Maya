@@ -939,7 +939,8 @@ internal fun MainActivity.applyActiveCharacterValues() {
     val char = characters.find { it.id == activeCharacterId }
     if (char != null) {
         charName     = char.name
-        userName     = char.userName
+        userName     = resolvedUserName(char)
+        userBio      = resolvedUserBio(char)
         systemPrompt = buildCharacterSystemPrompt(char)
     }
 }
