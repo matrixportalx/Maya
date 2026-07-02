@@ -158,6 +158,11 @@ internal fun MainActivity.generateMayagramPost(
  * [galleryImagePath] null VE [useAiImage] true ise: kullanıcının [captionText]'inden
  * LLM ile İngilizce bir Dream prompt'u türetilir ve Dream API ile görüntü üretilir.
  * İkisi de yoksa yalnızca metin gönderi paylaşılır.
+ *
+ * v6.11 Step 3: Gönderiyi paylaşan kişinin görünen adı/avatarı artık AKTİF KARAKTERE
+ * atanmış Kullanıcı Profili varsa ondan gelir (resolvedUserName/resolvedUserAvatarUri —
+ * MainActivityUserProfile.kt). Profil atanmamışsa eski davranışa (global userName/
+ * userAvatarUri ayarı) otomatik olarak düşülür, geriye dönük uyumluluk korunur.
  */
 internal fun MainActivity.generateUserPost(
     captionText: String,
@@ -174,8 +179,13 @@ internal fun MainActivity.generateUserPost(
 
     lifecycleScope.launch {
         try {
-            val prefs = getSharedPreferences("llama_prefs", android.content.Context.MODE_PRIVATE)
-            val userDisplayName = prefs.getString("user_name", "Kullanıcı") ?: "Kullanıcı"
+            // v6.11 Step 3: global userName/userAvatarUri yerine, aktif karaktere
+            // bir Kullanıcı Profili atanmışsa onu çözümle. Profil yoksa
+            // resolvedUserName/resolvedUserAvatarUri otomatik olarak global
+            // ayarlara düşer — davranış eski haliyle bozulmaz.
+            val activeChar         = characters.find { it.id == activeCharacterId }
+            val userDisplayName    = resolvedUserName(activeChar)
+            val userDisplayAvatar  = resolvedUserAvatarUri(activeChar)
 
             var finalImagePath: String? = galleryImagePath
             var usedPrompt: String? = null
@@ -224,7 +234,7 @@ internal fun MainActivity.generateUserPost(
                 characterId        = "user",
                 characterName      = userDisplayName,
                 characterEmoji     = "👤",
-                characterAvatarUri = userAvatarUri,
+                characterAvatarUri = userDisplayAvatar,
                 caption            = captionText,
                 imagePath          = finalImagePath,
                 dreamPrompt        = usedPrompt,
