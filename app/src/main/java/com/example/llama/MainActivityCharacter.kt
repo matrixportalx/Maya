@@ -417,7 +417,8 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
                 firstMessage = firstMsg,
                 description = description,
                 personality = personality,
-                autoPostEnabled = autoPostSwitch.isChecked
+                autoPostEnabled = autoPostSwitch.isChecked,
+                userProfileId = tempUserProfileId
             )
             if (isNew) {
                 characters.add(char)
