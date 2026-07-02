@@ -985,6 +985,7 @@ internal fun MainActivity.applyPersona(text: String): String {
     return text
         .replace("{{char}}", charName)
         .replace("{{user}}", userName)
+        .replace("{{user_bio}}", userBio)
         .replace("{{date}}", dateStr)
         .replace("{{time}}", timeStr)
 }
