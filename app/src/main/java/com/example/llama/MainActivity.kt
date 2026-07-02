@@ -60,7 +60,8 @@ data class MayaCharacter(
     val firstMessage: String = "",   // v6.3: Tavern "first_mes" alanı — henüz otomatik kullanılmıyor
     val description: String = "",    // v6.4: Tavern "description" alanı — bio/görünüm
     val personality: String = "",    // v6.4: Tavern "personality" alanı — kişilik özeti
-    val autoPostEnabled: Boolean = false  // v6.8: Otomatik Mayagram paylaşımı bu karakter için açık mı
+    val autoPostEnabled: Boolean = false,  // v6.8: Otomatik Mayagram paylaşımı bu karakter için açık mı
+    val userProfileId: String? = null  // v6.11: Atanmış kullanıcı profili — doluysa userName yerine bu kullanılır
 )
 
 // ── Özel şablon veri sınıfı ──────────────────────────────────────────────────
