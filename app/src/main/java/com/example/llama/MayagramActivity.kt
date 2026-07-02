@@ -651,9 +651,16 @@ class MayagramActivity : AppCompatActivity() {
             val text = commentEdit.text.toString().trim()
             if (text.isBlank()) return@setOnClickListener
 
+            // v6.11 Step 3: aktif karaktere atanmış Kullanıcı Profili varsa yorum da
+            // o profilin isim/avatarıyla gönderilir. Maya ana ekranı kapalıysa (main == null)
+            // veya profil atanmamışsa eski global "user_name"/"user_avatar_uri" ayarına düşülür.
+            val main = MainActivity.currentInstance
+            val activeChar = main?.characters?.find { it.id == main.activeCharacterId }
             val prefs = getSharedPreferences("llama_prefs", MODE_PRIVATE)
-            val userName     = prefs.getString("user_name", "Kullanıcı") ?: "Kullanıcı"
-            val userAvatar   = prefs.getString("user_avatar_uri", null)
+            val userName = main?.resolvedUserName(activeChar)
+                ?: (prefs.getString("user_name", "Kullanıcı") ?: "Kullanıcı")
+            val userAvatar = main?.resolvedUserAvatarUri(activeChar)
+                ?: prefs.getString("user_avatar_uri", null)
             val currentReplyTarget = replyTarget
 
             val comment = MayagramComment(
