@@ -9,6 +9,27 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 
+// ── Karaktere atanmış profili çözümleme yardımcıları (v6.11) ─────────────────
+
+internal fun MainActivity.resolvedUserProfileFor(char: MayaCharacter?): UserProfile? {
+    val pid = char?.userProfileId ?: return null
+    return UserProfile.loadAll(this).find { it.id == pid }
+}
+
+internal fun MainActivity.resolvedUserName(char: MayaCharacter?): String {
+    resolvedUserProfileFor(char)?.let { return it.name }
+    return char?.userName ?: "Kullanıcı"
+}
+
+internal fun MainActivity.resolvedUserBio(char: MayaCharacter?): String {
+    return resolvedUserProfileFor(char)?.bio ?: ""
+}
+
+internal fun MainActivity.resolvedUserAvatarUri(char: MayaCharacter?): String? {
+    resolvedUserProfileFor(char)?.let { return it.avatarUri }
+    return userAvatarUri  // profil yoksa global kullanıcı avatarına düş (eski davranış)
+}
+
 // ── Kullanıcı Profilleri: Yönetim Listesi ─────────────────────────────────────
 
 internal fun MainActivity.showUserProfileManagerDialog() {
