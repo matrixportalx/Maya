@@ -21,6 +21,22 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
+// ── AI ile karakter oluşturma: taslak veri sınıfı ─────────────────────────────
+
+/**
+ * generateCharacterFromIdea() tarafından üretilen ham karakter taslağı.
+ * Henüz bir MayaCharacter DEĞİLDİR — showCharacterEditDialog'a "aiPrefill" olarak
+ * geçirilir, kullanıcı gözden geçirip Kaydet'e basınca gerçek MayaCharacter olur.
+ */
+internal data class AiCharacterDraft(
+    val name: String,
+    val emoji: String,
+    val description: String,
+    val personality: String,
+    val scenario: String,
+    val firstMessage: String
+)
+
 // ── Karakter kurulumu (drawer) ────────────────────────────────────────────────
 
 internal fun MainActivity.setupCharacters() {
@@ -41,15 +57,16 @@ internal fun MainActivity.setupCharacters() {
 }
 
 /**
- * "+ Ekle" butonuna basıldığında: manuel oluştur ya da Tavern kartı içe aktar seçimi.
+ * "+ Ekle" butonuna basıldığında: manuel oluştur, AI ile oluştur ya da Tavern kartı içe aktar seçimi.
  */
 internal fun MainActivity.showAddCharacterChoiceDialog() {
     android.app.AlertDialog.Builder(this)
         .setTitle("Yeni Karakter")
-        .setItems(arrayOf("✏️ Manuel Oluştur", "🃏 Tavern Kartı İçe Aktar (.png)")) { _, which ->
+        .setItems(arrayOf("✏️ Manuel Oluştur", "✨ AI ile Oluştur", "🃏 Tavern Kartı İçe Aktar (.png)")) { _, which ->
             when (which) {
                 0 -> showCharacterEditDialog(null)
-                1 -> pickTavernCardFile()
+                1 -> showAiCharacterCreateDialog()
+                2 -> pickTavernCardFile()
             }
         }
         .setNegativeButton("İptal", null).show()
@@ -70,7 +87,234 @@ internal fun MainActivity.showCharacterOptionsDialog(char: MayaCharacter) {
         .setNegativeButton("İptal", null).show()
 }
 
-internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
+// ── AI ile karakter oluşturma: fikir girişi diyaloğu ──────────────────────────
+
+/**
+ * Kullanıcının serbest metinle karakter fikrini yazdığı diyalog.
+ * "Oluştur"a basınca generateCharacterFromIdea() çağrılır; üretim tamamlanınca
+ * showCharacterEditDialog(null, aiPrefill = ...) ile gözden geçirme ekranı açılır
+ * (henüz kaydedilmez — kullanıcı orada "Kaydet"e basmalı).
+ */
+internal fun MainActivity.showAiCharacterCreateDialog() {
+    if (loadedModelPath == null) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("⚠️ Model Gerekli")
+            .setMessage("AI ile karakter oluşturmak için önce bir model yüklemeniz gerekir.")
+            .setPositiveButton("Tamam", null).show()
+        return
+    }
+
+    val dp = resources.displayMetrics.density
+    val layout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding((20*dp).toInt(), (16*dp).toInt(), (20*dp).toInt(), (8*dp).toInt())
+    }
+
+    layout.addView(TextView(this).apply {
+        text = "Karakter hakkında aklına ne geliyorsa yaz — model geri kalanını (isim, açıklama, kişilik, senaryo, ilk mesaj) senin için oluşturacak. Sonra dilediğin gibi düzenleyip kaydedebilirsin."
+        textSize = 12f; alpha = 0.7f
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = (8*dp).toInt() }
+    })
+
+    val ideaEdit = android.widget.EditText(this).apply {
+        hint = "Örn: Uzayda kaybolmuş, biraz alaycı ama sevimli bir robot. Kullanıcıyı \"kaptan\" diye çağırır…"
+        minLines = 4; maxLines = 8; isSingleLine = false
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+    layout.addView(ideaEdit)
+
+    val statusLabel = TextView(this).apply {
+        textSize = 11f; alpha = 0.75f
+        visibility = android.view.View.GONE
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = (8*dp).toInt() }
+    }
+    layout.addView(statusLabel)
+
+    val dialog = android.app.AlertDialog.Builder(this)
+        .setTitle("✨ AI ile Karakter Oluştur")
+        .setView(layout)
+        .setPositiveButton("Oluştur", null)
+        .setNegativeButton("İptal", null)
+        .create()
+
+    dialog.setOnShowListener {
+        val btn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+        btn.setOnClickListener {
+            val idea = ideaEdit.text.toString().trim()
+            if (idea.isEmpty()) {
+                Toast.makeText(this, "Önce karakter hakkında birkaç kelime yazın", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            btn.isEnabled = false
+            ideaEdit.isEnabled = false
+            statusLabel.visibility = android.view.View.VISIBLE
+            statusLabel.text = "🧠 Karakter oluşturuluyor…"
+
+            generateCharacterFromIdea(
+                idea = idea,
+                onProgress = { status -> statusLabel.text = status },
+                onDone = { draft ->
+                    dialog.dismiss()
+                    showCharacterEditDialog(null, aiPrefill = draft)
+                },
+                onError = { msg ->
+                    statusLabel.text = "❌ $msg"
+                    btn.isEnabled = true
+                    ideaEdit.isEnabled = true
+                }
+            )
+        }
+    }
+
+    dialog.show()
+}
+
+/**
+ * Kullanıcının yazdığı fikirden LLM ile eksiksiz bir karakter taslağı üretir.
+ * Model context'ini bozmadan sendBypassPrompt kullanılır (avatar/Mayagram üretimiyle aynı desen).
+ * Çıktı formatı satır bazlı (NAME:/EMOJI:/...) — JSON değil, küçük yerel modellerde çok daha
+ * güvenilir parse edilir (Mayagram'daki CAPTION:/IMAGE_PROMPT: ile aynı yaklaşım).
+ */
+internal fun MainActivity.generateCharacterFromIdea(
+    idea: String,
+    onProgress: (String) -> Unit,
+    onDone: (AiCharacterDraft) -> Unit,
+    onError: (String) -> Unit
+) {
+    lifecycleScope.launch {
+        try {
+            onProgress("🧠 Karakter oluşturuluyor…")
+
+            val instruction = buildString {
+                appendLine("Aşağıdaki fikirden yola çıkarak eksiksiz bir rol yapma (roleplay) karakteri tasarla.")
+                appendLine("TAM OLARAK şu formatta yanıt ver, her alanı TEK SATIRDA yaz, başka hiçbir açıklama ekleme:")
+                appendLine()
+                appendLine("NAME: <karakterin adı>")
+                appendLine("EMOJI: <karakteri temsil eden tek bir emoji>")
+                appendLine("DESCRIPTION: <görünüm, geçmiş, kim olduğu — 2-4 cümle>")
+                appendLine("PERSONALITY: <kişilik özellikleri — 1-2 cümle>")
+                appendLine("SCENARIO: <kullanıcıyla ilişkisi/bağlamı — 1-2 cümle>")
+                append("FIRST_MESSAGE: <karakterin sohbeti başlatırken söyleyeceği ilk söz, karakterine uygun>")
+                appendLine()
+                appendLine()
+                appendLine("Fikir: \"$idea\"")
+            }
+
+            val fullPrompt = buildAiCharacterPromptTemplate(instruction)
+            val sb = StringBuilder()
+            try {
+                val impl = engine as? InferenceEngineImpl
+                val tokenFlow = if (impl != null) {
+                    impl.sendBypassPrompt(fullPrompt, 400)
+                } else {
+                    engine.sendUserPrompt(fullPrompt, predictLength = 400)
+                }
+                tokenFlow.collect { token -> sb.append(token) }
+            } catch (e: Exception) {
+                onError("LLM hatası: ${e.message}")
+                return@launch
+            }
+
+            val raw = extractAiCharacterVisibleContent(sb.toString())
+            MainActivity.log("AiCharacter", "Ham yanıt (temizlenmiş): $raw")
+
+            val name         = extractAiCharacterLine(raw, "NAME:")
+            val emoji        = extractAiCharacterLine(raw, "EMOJI:")
+            val description  = extractAiCharacterLine(raw, "DESCRIPTION:")
+            val personality  = extractAiCharacterLine(raw, "PERSONALITY:")
+            val scenario     = extractAiCharacterLine(raw, "SCENARIO:")
+            val firstMessage = extractAiCharacterLine(raw, "FIRST_MESSAGE:")
+
+            if (name.isBlank() && description.isBlank()) {
+                onError("Model geçerli bir karakter üretemedi, tekrar deneyin")
+                return@launch
+            }
+
+            val draft = AiCharacterDraft(
+                name         = name.ifBlank { "Yeni Karakter" },
+                emoji        = emoji.ifBlank { "🃏" }.take(4),
+                description  = description,
+                personality  = personality,
+                scenario     = scenario,
+                firstMessage = firstMessage
+            )
+            onDone(draft)
+        } catch (e: Exception) {
+            onError("Hata: ${e.message}")
+        }
+    }
+}
+
+/**
+ * AI karakter oluşturma prompt'unu seçili şablona göre sarmalar.
+ * Gemma 4 (template=7): thinking KAPALI — sadece kısa yapılandırılmış metin isteniyor.
+ */
+private fun MainActivity.buildAiCharacterPromptTemplate(instruction: String): String {
+    return when (selectedTemplate) {
+        0    -> instruction
+        1    -> "<BOS_TOKEN><|START_OF_TURN_TOKEN|><|USER_TOKEN|>$instruction<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+        2    -> "<|im_start|>user\n$instruction<|im_end|>\n<|im_start|>assistant\n"
+        3    -> "<bos><start_of_turn>user\n$instruction<end_of_turn>\n<start_of_turn>model\n"
+        4    -> "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n$instruction<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+        5    -> "<|start_of_role|>user<|end_of_role|>$instruction<|end_of_text|>\n<|start_of_role|>assistant<|end_of_role|>"
+        7    -> "<bos><|turn>user\n$instruction<turn|>\n<|turn>model\n"
+        else -> instruction
+    }
+}
+
+/**
+ * Model çıktısından thinking bloklarını ve format tokenlarını temizler,
+ * NAME: satırından itibaren olan kısmı döner (öncesinde model gevezelik yapmış olabilir).
+ */
+private fun extractAiCharacterVisibleContent(raw: String): String {
+    var text = raw
+
+    text = text.replace(Regex("""<\|channel>.*?<channel\|>""", RegexOption.DOT_MATCHES_ALL), "")
+    text = text.replace(Regex("""<think>.*?</think>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)), "")
+    val thinkIdx = text.indexOf("<think>")
+    if (thinkIdx != -1) text = text.substring(0, thinkIdx)
+    val channelIdx = text.indexOf("<|channel>")
+    if (channelIdx != -1) text = text.substring(0, channelIdx)
+
+    text = text
+        .replace("<|END_OF_TURN_TOKEN|>", "")
+        .replace("<|START_OF_TURN_TOKEN|>", "")
+        .replace("<|USER_TOKEN|>", "")
+        .replace("<|CHATBOT_TOKEN|>", "")
+        .replace("<|im_end|>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<end_of_turn>", "")
+        .replace("<start_of_turn>", "")
+        .replace("<turn|>", "")
+        .replace("<|turn>", "")
+        .replace("<|channel>", "")
+        .replace("<channel|>", "")
+        .replace("<|end_of_text|>", "")
+        .replace("<|endoftext|>", "")
+
+    val nameIdx = text.indexOf("NAME:", ignoreCase = true)
+    if (nameIdx > 0) text = text.substring(nameIdx)
+
+    return text.trim()
+}
+
+/** "NAME: Merve" → "Merve" şeklinde prefix'i kaldırır. */
+private fun extractAiCharacterLine(text: String, prefix: String): String {
+    return text.lines()
+        .firstOrNull { it.trimStart().startsWith(prefix, ignoreCase = true) }
+        ?.replaceFirst(Regex("(?i)^\\s*${Regex.escape(prefix)}\\s*"), "")
+        ?.trim() ?: ""
+}
+
+// ── Karakter düzenleme diyaloğu ───────────────────────────────────────────────
+
+/**
+ * [aiPrefill] doluysa (yalnızca [existing] == null iken anlamlıdır) alanlar AI taslağıyla
+ * önceden doldurulur. Kullanıcı yine de "Kaydet"e basana kadar hiçbir şey kaydedilmez;
+ * basınca [existing] null olduğu için yeni bir karakter (yeni UUID ile) oluşturulur.
+ */
+internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?, aiPrefill: AiCharacterDraft? = null) {
     val dp = resources.displayMetrics.density
     val isNew = existing == null
 
@@ -239,12 +483,24 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     layout.addView(avatarRow)
     layout.addView(aiStatusLabel)
 
+    // ── AI taslağından oluşturuluyorsa bilgi notu ────────────────────────────
+    if (aiPrefill != null && isNew) {
+        layout.addView(TextView(this).apply {
+            text = "✨ Bu karakter AI tarafından oluşturuldu. Kaydetmeden önce alanları gözden geçirip dilediğiniz gibi düzenleyebilirsiniz."
+            textSize = 11f
+            setTextColor(0xFF55CC77.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = (8*dp).toInt() }
+        })
+    }
+
     layout.addView(label("Emoji (Avatar yoksa gösterilir)"))
-    val emojiField = field("🃏", existing?.emoji ?: "🃏")
+    val emojiField = field("🃏", aiPrefill?.emoji ?: existing?.emoji ?: "🃏")
     layout.addView(emojiField)
 
     layout.addView(label("Karakter adı ({{char}})"))
-    val nameField = field("Maya", existing?.name ?: "Maya")
+    val nameField = field("Maya", aiPrefill?.name ?: existing?.name ?: "Maya")
     layout.addView(nameField)
 
     layout.addView(label("Kullanıcı Profili (isteğe bağlı — aynı profili birden fazla karaktere atayabilirsiniz)"))
@@ -287,19 +543,19 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     }
 
     layout.addView(label("Açıklama / Bio (görünüm, geçmiş, görev)"))
-    val descriptionField = field("Karakterin görünümünü, geçmişini tanımlayın...", existing?.description ?: existing?.systemPrompt ?: "", multiLine = true)
+    val descriptionField = field("Karakterin görünümünü, geçmişini tanımlayın...", aiPrefill?.description ?: existing?.description ?: existing?.systemPrompt ?: "", multiLine = true)
     layout.addView(descriptionField)
 
     layout.addView(label("Kişilik (isteğe bağlı)"))
-    val personalityField = field("Karakterin kişilik özelliklerini tanımlayın...", existing?.personality ?: "", multiLine = true)
+    val personalityField = field("Karakterin kişilik özelliklerini tanımlayın...", aiPrefill?.personality ?: existing?.personality ?: "", multiLine = true)
     layout.addView(personalityField)
 
     layout.addView(label("Senaryo (kullanıcıyla ilişki/bağlam — isteğe bağlı)"))
-    val scenarioField = field("Örn: Sen ve {{user}} eski arkadaşsınız...", existing?.scenario ?: "", multiLine = true)
+    val scenarioField = field("Örn: Sen ve {{user}} eski arkadaşsınız...", aiPrefill?.scenario ?: existing?.scenario ?: "", multiLine = true)
     layout.addView(scenarioField)
 
     layout.addView(label("İlk mesaj (isteğe bağlı)"))
-    val firstMessageField = field("Karakterin sohbet başında söyleyeceği ilk söz...", existing?.firstMessage ?: "", multiLine = true)
+    val firstMessageField = field("Karakterin sohbet başında söyleyeceği ilk söz...", aiPrefill?.firstMessage ?: existing?.firstMessage ?: "", multiLine = true)
     layout.addView(firstMessageField)
 
     // ── v6.8: Otomatik Mayagram paylaşımı switch'i ───────────────────────────
