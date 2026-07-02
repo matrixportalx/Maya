@@ -1,11 +1,13 @@
 package tr.maya
 
+import com.arm.aichat.InferenceEngine
 import com.arm.aichat.internal.InferenceEngineImpl
 import android.content.Intent
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tr.maya.data.AppDatabase
@@ -17,6 +19,70 @@ import java.io.FileOutputStream
 internal fun MainActivity.openMayagram() {
     val intent = Intent(this, MayagramActivity::class.java)
     startActivity(intent)
+}
+
+// ── v6.12: Bypass motor hazır bekleme (race condition çözümü) ─────────────────
+
+/**
+ * sendBypassPrompt() çağrılmadan ÖNCE motorun ModelReady durumuna gelmesini bekler.
+ *
+ * Neden gerekli: InferenceEngineImpl paylaşımlı bir singleton'dır (AiChat.getInferenceEngine).
+ * Kullanıcı normal sohbette yanıt üretirken (Generating/ProcessingUserPrompt) VEYA
+ * DailyReportWorker/MayagramAutoPostWorker arka planda modeli yüklerken/kaldırırken
+ * (LoadingModel/UnloadingModel/Initialized) Mayagram'ın sendBypassPrompt çağrısı
+ * ANINDA "Bypass prompt reddedildi: <state>" IllegalStateException'ı ile başarısız olur.
+ * Bu hata generateCharacterComment/generateMayagramPost içindeki catch(Exception)
+ * bloğunda sessizce yutulduğu için kullanıcıya "karakter bazen yorum yapmıyor" gibi
+ * görünür — hiçbir hata mesajı göstermeden.
+ *
+ * Bu fonksiyon en fazla [timeoutMs] boyunca 200ms aralıklarla motoru kontrol eder.
+ * Motor meşgulse (Generating, LoadingModel vb.) bekler; Error veya Uninitialized
+ * durumundaysa beklemenin anlamı olmadığından hemen false döner.
+ */
+internal suspend fun MainActivity.waitForEngineReadyForBypass(timeoutMs: Long = 6000L): Boolean {
+    val impl = engine as? InferenceEngineImpl ?: return false
+    var waited = 0L
+    val step = 200L
+    while (waited < timeoutMs) {
+        val st = impl.state.value
+        if (st is InferenceEngine.State.ModelReady) return true
+        if (st is InferenceEngine.State.Error || st is InferenceEngine.State.Uninitialized) return false
+        delay(step)
+        waited += step
+    }
+    return impl.state.value is InferenceEngine.State.ModelReady
+}
+
+// ── v6.12: Karaktere özel {{char}}/{{user}}/{{user_bio}}/{{date}}/{{time}} çözümü ──
+
+/**
+ * applyPersona() (MainActivityCharacter.kt) aktif SOHBET karakterine bağlı global
+ * charName/userName/userBio alanlarını kullanır — Mayagram'da bu YANLIŞ olurdu,
+ * çünkü paylaşım yapan karakter aktif sohbet karakterinden farklı olabilir.
+ *
+ * Bu fonksiyon yer tutucuları VERİLEN [character]'a göre çözümler:
+ *   {{char}}      → character.name
+ *   {{user}}      → resolvedUserName(character)  — karaktere atanmış profil varsa onun adı
+ *   {{user_bio}}  → resolvedUserBio(character)    — karaktere atanmış profil varsa onun bio'su
+ *   {{date}} / {{time}} → günün tarihi/saati
+ */
+internal fun MainActivity.applyMayagramPersona(text: String, character: MayaCharacter): String {
+    if (text.isBlank()) return text
+    val now = java.util.Calendar.getInstance()
+    val dateStr = String.format("%d %s %d",
+        now.get(java.util.Calendar.DAY_OF_MONTH),
+        arrayOf("Ocak","Şubat","Mart","Nisan","Mayıs","Haziran",
+                 "Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık")[now.get(java.util.Calendar.MONTH)],
+        now.get(java.util.Calendar.YEAR))
+    val timeStr = String.format("%02d:%02d",
+        now.get(java.util.Calendar.HOUR_OF_DAY),
+        now.get(java.util.Calendar.MINUTE))
+    return text
+        .replace("{{char}}", character.name)
+        .replace("{{user}}", resolvedUserName(character))
+        .replace("{{user_bio}}", resolvedUserBio(character))
+        .replace("{{date}}", dateStr)
+        .replace("{{time}}", timeStr)
 }
 
 // ── Post üretimi: LLM + Dream API pipeline (karakter gönderisi) ──────────────
@@ -40,11 +106,13 @@ internal fun MainActivity.generateMayagramPost(
             val topicLine = if (!topic.isNullOrBlank()) "Konu: $topic\n" else ""
 
             val systemInstr = buildString {
-            val charPrompt = character.systemPrompt.ifEmpty {
-                listOf(character.description, character.personality, character.scenario)
-                    .filter { it.isNotBlank() }.joinToString(". ")
-            }
-            appendLine("Sen ${character.name} karakterisin. ${charPrompt}")
+                val rawCharPrompt = character.systemPrompt.ifEmpty {
+                    listOf(character.description, character.personality, character.scenario)
+                        .filter { it.isNotBlank() }.joinToString(". ")
+                }
+                // v6.12: {{char}}/{{user}}/{{user_bio}} vb. karaktere özel çözümlenir
+                val charPrompt = applyMayagramPersona(rawCharPrompt, character)
+                appendLine("Sen ${character.name} karakterisin. ${charPrompt}")
                 appendLine()
                 if (topicLine.isNotBlank()) appendLine(topicLine)
                 appendLine()
@@ -59,6 +127,11 @@ internal fun MainActivity.generateMayagramPost(
 
             try {
                 val impl = engine as? InferenceEngineImpl
+                // v6.12: sendBypassPrompt çağırmadan önce motorun müsait olmasını bekle
+                if (impl != null && !waitForEngineReadyForBypass()) {
+                    onError("Model şu anda meşgul (sohbet veya başka bir işlem sürüyor). Birazdan tekrar deneyin.")
+                    return@launch
+                }
                 val tokenFlow = if (impl != null) {
                     impl.sendBypassPrompt(fullPrompt, 250)
                 } else {
@@ -270,6 +343,11 @@ private suspend fun MainActivity.generateImagePromptFromCaption(captionText: Str
     val sb = StringBuilder()
     try {
         val impl = engine as? InferenceEngineImpl
+        // v6.12: motor meşgulse (kısa süre) bekle, hâlâ hazır değilse caption'a düş
+        if (impl != null && !waitForEngineReadyForBypass(timeoutMs = 4000L)) {
+            MainActivity.log("Mayagram", "Görsel prompt üretimi: motor meşgul, caption fallback kullanılıyor")
+            return captionText.take(80)
+        }
         val tokenFlow = if (impl != null) impl.sendBypassPrompt(fullPrompt, 60)
                         else engine.sendUserPrompt(fullPrompt, predictLength = 60)
         tokenFlow.collect { sb.append(it) }
@@ -309,8 +387,18 @@ internal fun MainActivity.generateCharacterComment(
             }
 
             val prompt = buildMayagramCommentPrompt(post, commenter, replyToText, replyToAuthorName)
-            val sb = StringBuilder()
+
             val impl = engine as? InferenceEngineImpl
+            // v6.12: sendBypassPrompt çağırmadan önce motorun müsait olmasını bekle.
+            // Bu bekleme olmadan, sohbet yanıtı üretilirken veya bir Worker modeli
+            // yüklerken/kaldırırken gelen bu çağrı ANINDA sessizce başarısız oluyordu —
+            // "karakterler bazen yorum yapmıyor" şikayetinin asıl nedeni buydu.
+            if (impl != null && !waitForEngineReadyForBypass()) {
+                MainActivity.log("Mayagram", "${commenter.name}: motor meşgul (${impl.state.value.javaClass.simpleName}), yorum atlandı")
+                return@launch
+            }
+
+            val sb = StringBuilder()
             val tokenFlow = if (impl != null) {
                  impl.sendBypassPrompt(prompt, 100)
             } else {
@@ -383,7 +471,7 @@ internal fun MainActivity.triggerAutoLikes(
     lifecycleScope.launch {
         val db = AppDatabase.getInstance(this@triggerAutoLikes)
         likers.forEachIndexed { index, character ->
-            kotlinx.coroutines.delay(400L + (index * 350L))
+            delay(400L + (index * 350L))
             withContext(Dispatchers.IO) {
                 db.mayagramDao().insertCharacterLike(
                     MayagramPostLike(
@@ -425,10 +513,12 @@ private fun MainActivity.buildMayagramCommentPrompt(
     replyToText: String? = null,
     replyToAuthorName: String? = null
 ): String {
-    val charPrompt = commenter.systemPrompt.ifEmpty {
+    val rawCharPrompt = commenter.systemPrompt.ifEmpty {
         listOf(commenter.description, commenter.personality, commenter.scenario)
             .filter { it.isNotBlank() }.joinToString(". ")
     }
+    // v6.12: {{char}}/{{user}}/{{user_bio}} vb. yorum yazan karaktere özel çözümlenir
+    val charPrompt = applyMayagramPersona(rawCharPrompt, commenter)
 
     val instruction = buildString {
         appendLine("Sen ${commenter.name} karakterisin.")
