@@ -103,13 +103,15 @@ internal fun MainActivity.loadSettings() {
         messageAdapter.charAvatarUri = activeChar?.avatarUri
         messageAdapter.charEmoji     = activeChar?.emoji ?: "🤖"
         messageAdapter.charName      = activeChar?.name  ?: charName
-        messageAdapter.userName      = activeChar?.userName ?: userName
+        messageAdapter.userName      = userName
     } catch (_: UninitializedPropertyAccessException) {}
 
     // ── v6.0: Kullanıcı avatarı ───────────────────────────────────────────────
+    // v6.11: Karaktere bir kullanıcı profili atanmışsa o profilin avatarı önceliklidir,
+    // yoksa global "user_avatar_uri" ayarına düşülür (eski davranış korunur).
     userAvatarUri = prefs.getString("user_avatar_uri", null)
     try {
-        messageAdapter.userAvatarUri = userAvatarUri
+        messageAdapter.userAvatarUri = resolvedUserAvatarUri(activeChar)
     } catch (_: UninitializedPropertyAccessException) {}
 }
 
