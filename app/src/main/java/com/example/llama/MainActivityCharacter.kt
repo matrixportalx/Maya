@@ -869,6 +869,7 @@ internal fun MainActivity.saveCharactersToPrefs(list: List<MayaCharacter>) {
             put("description", char.description)
             put("personality", char.personality)
             put("auto_post_enabled", char.autoPostEnabled)
+            put("user_profile_id", char.userProfileId ?: "")
         })
     }
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
