@@ -948,7 +948,8 @@ internal fun MainActivity.applyActiveCharacterValues() {
 internal fun MainActivity.setActiveCharacter(char: MayaCharacter) {
     activeCharacterId = char.id
     charName          = char.name
-    userName          = char.userName
+    userName          = resolvedUserName(char)
+    userBio           = resolvedUserBio(char)
     systemPrompt      = buildCharacterSystemPrompt(char)
     getSharedPreferences("llama_prefs", Context.MODE_PRIVATE)
         .edit().putString("active_character_id", char.id).apply()
@@ -958,7 +959,8 @@ internal fun MainActivity.setActiveCharacter(char: MayaCharacter) {
     messageAdapter.charName     = char.name
     messageAdapter.charEmoji    = char.emoji
     messageAdapter.charAvatarUri = char.avatarUri
-    messageAdapter.userName     = char.userName
+    messageAdapter.userName     = userName
+    messageAdapter.userAvatarUri = resolvedUserAvatarUri(char)
     messageAdapter.notifyDataSetChanged()
     updateActiveModelSubtitle()
     if (loadedModelPath != null && selectedTemplate == 0 && systemPrompt.isNotEmpty()) {
