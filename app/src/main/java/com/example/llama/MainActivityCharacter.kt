@@ -247,9 +247,44 @@ internal fun MainActivity.showCharacterEditDialog(existing: MayaCharacter?) {
     val nameField = field("Maya", existing?.name ?: "Maya")
     layout.addView(nameField)
 
-    layout.addView(label("Kullanıcı adı ({{user}})"))
+    layout.addView(label("Kullanıcı Profili (isteğe bağlı — aynı profili birden fazla karaktere atayabilirsiniz)"))
+    var tempUserProfileId: String? = existing?.userProfileId
+    val profilePickerBtn = android.widget.Button(this).apply {
+        isAllCaps = false; textSize = 12f
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+    layout.addView(profilePickerBtn)
+
+    layout.addView(label("Kullanıcı adı ({{user}}) — profil seçiliyse otomatik doldurulur"))
     val userNameField = field("Kullanıcı", existing?.userName ?: "")
     layout.addView(userNameField)
+
+    fun refreshProfileButtonLabel() {
+        val profiles = UserProfile.loadAll(this)
+        val selected = profiles.find { it.id == tempUserProfileId }
+        if (selected != null) {
+            profilePickerBtn.text = "👤 ${selected.name}  (değiştirmek için dokun)"
+            userNameField.setText(selected.name)
+            userNameField.isEnabled = false
+        } else {
+            profilePickerBtn.text = "🚫 Profil Yok — manuel isim kullanılıyor (değiştirmek için dokun)"
+            userNameField.isEnabled = true
+        }
+    }
+    refreshProfileButtonLabel()
+
+    profilePickerBtn.setOnClickListener {
+        val profiles = UserProfile.loadAll(this)
+        val options = mutableListOf("🚫 Profil Yok (manuel isim)")
+        options.addAll(profiles.map { "👤 ${it.name}" })
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Kullanıcı Profili Seç")
+            .setItems(options.toTypedArray()) { _, which ->
+                tempUserProfileId = if (which == 0) null else profiles[which - 1].id
+                refreshProfileButtonLabel()
+            }
+            .setNegativeButton("İptal", null).show()
+    }
 
     layout.addView(label("Açıklama / Bio (görünüm, geçmiş, görev)"))
     val descriptionField = field("Karakterin görünümünü, geçmişini tanımlayın...", existing?.description ?: existing?.systemPrompt ?: "", multiLine = true)
