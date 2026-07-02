@@ -849,7 +849,8 @@ internal fun MainActivity.loadCharactersFromPrefs(): List<MayaCharacter> {
                 firstMessage = obj.optString("first_message", ""),
                 description = description,
                 personality = obj.optString("personality", ""),
-                autoPostEnabled = obj.optBoolean("auto_post_enabled", false)
+                autoPostEnabled = obj.optBoolean("auto_post_enabled", false),
+                userProfileId = obj.optString("user_profile_id", "").ifEmpty { null }
             )
         }
     } catch (e: Exception) { emptyList() }
