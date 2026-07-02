@@ -226,6 +226,7 @@ class MainActivity : AppCompatActivity() {
     // Persona
     internal var charName: String = "Asistan"
     internal var userName: String = "Kullanıcı"
+    internal var userBio: String = ""   // v6.11: Aktif profilin bio'su — {{user_bio}} için
 
     // ── Karakter sistemi ──────────────────────────────────────────────────────
     internal var characters: MutableList<MayaCharacter> = mutableListOf()
